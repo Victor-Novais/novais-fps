@@ -56,8 +56,9 @@ Set-RegistryString -Ctx $ctx -Path $gamesTask -Name "SFIO Priority" -Value "High
 Set-RegistryDword -Ctx $ctx -Path $memMgmt -Name "LargeSystemCache" -Value 1 -Note "Enable large system cache (server-like file cache behavior)"
 Set-RegistryDword -Ctx $ctx -Path $memMgmt -Name "DisablePagingExecutive" -Value 1 -Note "Keep kernel/system code resident in memory (reduce paging)"
 
-# I/O priority for foreground (Win32PrioritySeparation)
-Set-RegistryDword -Ctx $ctx -Path $priorityCtrl -Name "Win32PrioritySeparation" -Value 26 -Note "Favor foreground responsiveness / I/O"
+# Context Switch / Quantum optimization: short quantum for low latency (Win32PrioritySeparation)
+# Value 2 = short quantum, favors foreground (low latency over throughput)
+Set-RegistryDword -Ctx $ctx -Path $priorityCtrl -Name "Win32PrioritySeparation" -Value 2 -Note "Short quantum for low-latency context switching (favors foreground)"
 
 # Disable SysMain (Superfetch) to reduce unnecessary I/O latency on SSD
 Set-ServiceSafe -Ctx $ctx -Name "SysMain" -StartupType "Disabled" -Action "Stop" -Note "Disable SysMain (Superfetch) for low-latency I/O"
