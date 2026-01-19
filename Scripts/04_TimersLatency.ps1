@@ -29,10 +29,9 @@ if ($Mode -eq "Rollback") {
     $target = Load-JsonFile -Path $TargetContextJson
     if ($null -eq $target) { Write-Log -Level "ERROR" -Message "Cannot load target context: $TargetContextJson"; exit 2 }
 
-    Write-Log "Rollback: removing bcdedit values we may have set (useplatformclock / useplatformtick)."
+    Write-Log "Rollback: removing bcdedit values we may have set (useplatformclock)."
     try { & bcdedit /deletevalue useplatformclock | Out-Null } catch { }
-    try { & bcdedit /deletevalue useplatformtick | Out-Null } catch { }
-    Write-Log "Rollback: bcdedit values removed (if present). Reboot may be required."
+    Write-Log "Rollback: bcdedit value removed (if present). Reboot may be required."
     exit 0
 }
 
@@ -43,16 +42,12 @@ Write-Log ("  useplatformclock=" + (Get-BcdValue "useplatformclock"))
 Write-Log ("  useplatformtick=" + (Get-BcdValue "useplatformtick"))
 
 if ($EnableBcdTweaks -eq "true") {
-    Write-Log "Applying bcdedit: useplatformclock=false (prefer TSC), useplatformtick=yes (reduce tick jitter on some systems)."
+    Write-Log "Applying bcdedit: useplatformclock=No (prefer TSC)."
     $beforeClock = Get-BcdValue "useplatformclock"
-    $beforeTick  = Get-BcdValue "useplatformtick"
     try {
-        & bcdedit /set useplatformclock false | Out-Null
-        & bcdedit /set useplatformtick yes | Out-Null
+        & bcdedit /set useplatformclock No | Out-Null
         $afterClock = Get-BcdValue "useplatformclock"
-        $afterTick  = Get-BcdValue "useplatformtick"
         Add-Change -Ctx $ctx -Category "bcdedit" -Key "useplatformclock" -Before $beforeClock -After $afterClock -Note "Prefer TSC over HPET (reversible)"
-        Add-Change -Ctx $ctx -Category "bcdedit" -Key "useplatformtick" -Before $beforeTick -After $afterTick -Note "Platform tick enabled (reversible)"
         Write-Log "BCDEdit applied. A reboot may be required."
     } catch {
         Write-Log -Level "WARN" -Message "BCDEdit failed: $($_.Exception.Message)"
@@ -62,7 +57,21 @@ if ($EnableBcdTweaks -eq "true") {
     Add-Change -Ctx $ctx -Category "bcdedit" -Key "optOut" -Before $null -After "true" -Note "User opted out of bcdedit"
 }
 
+# Optional: call external TimerResolution helper if present (timeBeginPeriod(1)).
+try {
+    $timerExe = Join-Path $WorkspaceRoot "TimerResolution.exe"
+    if (Test-Path $timerExe) {
+        Write-Log "Invoking TimerResolution.exe for timeBeginPeriod(1)..."
+        Start-Process -FilePath $timerExe -ArgumentList "" -WindowStyle Hidden
+    } else {
+        Write-Log -Level "WARN" -Message "TimerResolution.exe not found in workspace root; skipping timer helper."
+    }
+} catch {
+    Write-Log -Level "WARN" -Message "Failed to invoke TimerResolution.exe: $($_.Exception.Message)"
+}
+
 Save-JsonFile -Obj $ctx -Path $ContextJson
 exit 0
+
 
 

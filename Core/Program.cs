@@ -1,5 +1,19 @@
-using NovaisFPS.Core;
 using System.Text;
+using NovaisFPS.Core;
+
+if (args.Length > 0)
+{
+    // Lightweight helper modes invoked from PowerShell
+    if (string.Equals(args[0], "--msi-enforce", StringComparison.OrdinalIgnoreCase))
+    {
+        var root = AppContext.BaseDirectory;
+        Directory.CreateDirectory(Path.Combine(root, "Logs"));
+        var logPath = Path.Combine(root, "Logs", $"msienforcer-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log");
+        var helperLog = new Logger(logPath);
+        var code = MSIEnforcer.Run(helperLog);
+        Environment.Exit(code);
+    }
+}
 
 static void ClearAndBanner()
 {

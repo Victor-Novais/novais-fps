@@ -17,3 +17,4 @@ C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\obj\Release\net8.0-windows\
 C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\obj\Release\net8.0-windows\NovaisFPS.pdb
 C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\obj\Release\net8.0-windows\NovaisFPS.genruntimeconfig.cache
 C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\obj\Release\net8.0-windows\ref\NovaisFPS.dll
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\obj\Release\net8.0-windows\NovaisFPS.sourcelink.json

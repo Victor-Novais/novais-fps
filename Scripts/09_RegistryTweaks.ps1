@@ -15,6 +15,7 @@ if ($null -eq $ctx) { $ctx = [pscustomobject]@{} }
 
 $sysProfile = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
 $gamesTask  = Join-Path $sysProfile "Tasks\Games"
+$memMgmt    = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management"
 
 if ($Mode -eq "Rollback") {
     if (-not $TargetContextJson) { Write-Log -Level "ERROR" -Message "Rollback requires -TargetContextJson"; exit 2 }
@@ -23,6 +24,7 @@ if ($Mode -eq "Rollback") {
     Write-Log "Rollback RegistryTweaks (best-effort)."
     Rollback-RegistryFromChanges -TargetCtx $target -PrefixMatch $sysProfile
     Rollback-RegistryFromChanges -TargetCtx $target -PrefixMatch "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"
+    Rollback-RegistryFromChanges -TargetCtx $target -PrefixMatch $memMgmt
     exit 0
 }
 
@@ -43,7 +45,12 @@ Set-RegistryDword -Ctx $ctx -Path $gamesTask -Name "Priority" -Value 6 -Note "Ga
 Set-RegistryString -Ctx $ctx -Path $gamesTask -Name "Scheduling Category" -Value "High" -Note "Games task: scheduling category"
 Set-RegistryString -Ctx $ctx -Path $gamesTask -Name "SFIO Priority" -Value "High" -Note "Games task: SFIO priority"
 
+# Kernel / memory management tweaks (conservative)
+Set-RegistryDword -Ctx $ctx -Path $memMgmt -Name "LargeSystemCache" -Value 1 -Note "Enable large system cache (server-like file cache behavior)"
+Set-RegistryDword -Ctx $ctx -Path $memMgmt -Name "DisablePagingExecutive" -Value 1 -Note "Keep kernel/system code resident in memory (reduce paging)"
+
 Save-JsonFile -Obj $ctx -Path $ContextJson
 exit 0
+
 
 
