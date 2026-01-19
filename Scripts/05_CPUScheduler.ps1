@@ -35,6 +35,57 @@ Set-RegistryDword -Ctx $ctx -Path "HKCU:\Software\Microsoft\GameBar" -Name "Auto
 Set-RegistryDword -Ctx $ctx -Path "HKCU:\System\GameConfigStore" -Name "GameDVR_Enabled" -Value 0 -Note "Disable Game DVR"
 Set-RegistryDword -Ctx $ctx -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR" -Name "AppCaptureEnabled" -Value 0 -Note "Disable Game DVR (AppCapture)"
 
+# Optional: affinity & priority helpers
+function Set-ProcessAffinityToLastCores {
+    param(
+        [Parameter(Mandatory=$true)][string[]]$ProcessNames,
+        [int]$CoreCountFromEnd = 2
+    )
+    $total = [Environment]::ProcessorCount
+    if ($total -le 1 -or $CoreCountFromEnd -le 0) { return }
+    $start = [Math]::Max(0, $total - $CoreCountFromEnd)
+    $mask = 0
+    for ($i = $start; $i -lt $total; $i++) {
+        $mask = $mask -bor (1 -shl $i)
+    }
+
+    foreach ($name in $ProcessNames) {
+        try {
+            $procs = Get-Process -Name $name -ErrorAction SilentlyContinue
+            foreach ($p in $procs) {
+                $before = $p.ProcessorAffinity
+                $p.ProcessorAffinity = [IntPtr]$mask
+                Add-Change -Ctx $ctx -Category "affinity" -Key $p.Id -Before $before -After $mask -Note "Pin $name to last $CoreCountFromEnd cores"
+                Write-Log "Affinity: $name (PID $($p.Id)) pinned to last $CoreCountFromEnd cores."
+            }
+        } catch {
+            Write-Log -Level "WARN" -Message "Affinity tweak failed for $name: $($_.Exception.Message)"
+        }
+    }
+}
+
+function Boost-ProcessPriority {
+    param(
+        [Parameter(Mandatory=$true)][string]$ProcessName,
+        [ValidateSet("AboveNormal","High","RealTime")][string]$Priority = "High"
+    )
+    $procs = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
+    foreach ($p in $procs) {
+        try {
+            $before = $p.PriorityClass
+            $p.PriorityClass = $Priority
+            Add-Change -Ctx $ctx -Category "priority" -Key $p.Id -Before $before -After $Priority -Note "Boost $ProcessName priority"
+            Write-Log "Priority: $ProcessName (PID $($p.Id)) $before -> $Priority."
+        } catch {
+            Write-Log -Level "WARN" -Message "Priority tweak failed for $ProcessName: $($_.Exception.Message)"
+        }
+    }
+}
+
+# Example (commented by default; user can enable manually):
+# Set-ProcessAffinityToLastCores -ProcessNames @("SearchIndexer","OneDrive") -CoreCountFromEnd 2
+# Boost-ProcessPriority -ProcessName "YourGameExeNameHere" -Priority "High"
+
 Save-JsonFile -Obj $ctx -Path $ContextJson
 exit 0
 

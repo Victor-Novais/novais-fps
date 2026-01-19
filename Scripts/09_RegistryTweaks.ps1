@@ -4,7 +4,8 @@ param(
     [Parameter(Mandatory=$true)][string]$WorkspaceRoot,
     [Parameter(Mandatory=$true)][string]$LogFile,
     [Parameter(Mandatory=$true)][string]$ContextJson,
-    [string]$TargetContextJson = ""
+    [string]$TargetContextJson = "",
+    [ValidateSet("true","false")][string]$EliteRisk = "false"
 )
 
 . (Join-Path $PSScriptRoot "_Common.ps1")
@@ -16,6 +17,7 @@ if ($null -eq $ctx) { $ctx = [pscustomobject]@{} }
 $sysProfile = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
 $gamesTask  = Join-Path $sysProfile "Tasks\Games"
 $memMgmt    = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management"
+$memThrottle = Join-Path $memMgmt "Throttle"
 
 if ($Mode -eq "Rollback") {
     if (-not $TargetContextJson) { Write-Log -Level "ERROR" -Message "Rollback requires -TargetContextJson"; exit 2 }
@@ -25,6 +27,7 @@ if ($Mode -eq "Rollback") {
     Rollback-RegistryFromChanges -TargetCtx $target -PrefixMatch $sysProfile
     Rollback-RegistryFromChanges -TargetCtx $target -PrefixMatch "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"
     Rollback-RegistryFromChanges -TargetCtx $target -PrefixMatch $memMgmt
+    Rollback-RegistryFromChanges -TargetCtx $target -PrefixMatch $memThrottle
     exit 0
 }
 
@@ -48,6 +51,21 @@ Set-RegistryString -Ctx $ctx -Path $gamesTask -Name "SFIO Priority" -Value "High
 # Kernel / memory management tweaks (conservative)
 Set-RegistryDword -Ctx $ctx -Path $memMgmt -Name "LargeSystemCache" -Value 1 -Note "Enable large system cache (server-like file cache behavior)"
 Set-RegistryDword -Ctx $ctx -Path $memMgmt -Name "DisablePagingExecutive" -Value 1 -Note "Keep kernel/system code resident in memory (reduce paging)"
+
+if ($EliteRisk -eq "true") {
+    Write-Log "Elite Risk profile ENABLED: applying Spectre/Meltdown mitigation overrides (higher performance, higher risk)."
+    # FeatureSettingsOverride / Mask = 3 => disable key mitigations per Microsoft docs.
+    Set-RegistryDword -Ctx $ctx -Path $memMgmt -Name "FeatureSettingsOverride" -Value 3 -Note "Disable selected CPU security mitigations (Spectre/Meltdown)"
+    Set-RegistryDword -Ctx $ctx -Path $memMgmt -Name "FeatureSettingsOverrideMask" -Value 3 -Note "Mask for FeatureSettingsOverride"
+
+    try {
+        Set-RegistryDword -Ctx $ctx -Path $memThrottle -Name "SpectreMitigation" -Value 0 -Note "Throttle: SpectreMitigation=0 (where applicable)"
+    } catch {
+        Write-Log -Level "WARN" -Message "SpectreMitigation throttle key not applied (OS may not support it): $($_.Exception.Message)"
+    }
+} else {
+    Write-Log "Elite Risk profile DISABLED: CPU security mitigations preserved."
+}
 
 Save-JsonFile -Obj $ctx -Path $ContextJson
 exit 0

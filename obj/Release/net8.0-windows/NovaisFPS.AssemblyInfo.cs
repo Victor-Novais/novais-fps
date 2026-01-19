@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("NovaisFPS")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6f8e1f65479f0de1474d2a6a9c7de4b45bfa17c8")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+08fa2ac6c28e2683c58badbbb54f2606801550ea")]
 [assembly: System.Reflection.AssemblyProductAttribute("NovaisFPS")]
 [assembly: System.Reflection.AssemblyTitleAttribute("NovaisFPS")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -76,6 +76,15 @@ Console.WriteLine("  3) Exit");
 Console.Write("Select: ");
 var choice = Console.ReadLine()?.Trim();
 
+bool eliteRisk = false;
+if (choice == "1")
+{
+    Console.WriteLine();
+    Console.WriteLine("Elite Risk profile: disables certain CPU security mitigations (Spectre/Meltdown)");
+    Console.WriteLine("for maximum performance. This INCREASES security risk.");
+    eliteRisk = Confirm("Enable Elite Risk profile (NOT recommended for general use)?");
+}
+
 var ps = new PowerShellExecutor(log);
 var scriptsDir = ctx.GetAbsPath("Scripts");
 
@@ -177,7 +186,8 @@ r = ps.RunScript(Script("08_Network.ps1"), "Apply", ctx);
 if (!r.Success) return;
 
 log.Info("Phase 9/10: Registry advanced (reversible).");
-r = ps.RunScript(Script("09_RegistryTweaks.ps1"), "Apply", ctx);
+var reg9Args = new Dictionary<string, string> { ["-EliteRisk"] = eliteRisk ? "true" : "false" };
+r = ps.RunScript(Script("09_RegistryTweaks.ps1"), "Apply", ctx, extraArgs: reg9Args);
 if (!r.Success) return;
 
 log.Info("Phase 10/10: Validation and summary.");
