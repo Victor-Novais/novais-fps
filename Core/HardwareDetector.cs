@@ -15,6 +15,7 @@ public sealed record HardwareSnapshot
     public List<string> Gpus { get; init; } = new();
     public List<string> Disks { get; init; } = new();
     public string CurrentPowerSchemeGuid { get; init; } = "";
+    public HealthSnapshot? Health { get; init; }
 }
 
 public sealed class HardwareDetector
@@ -91,6 +92,15 @@ public sealed class HardwareDetector
         }
 
         snap = snap with { CurrentPowerSchemeGuid = TryGetActivePowerScheme(log) };
+    try
+    {
+        var health = HealthMetrics.Collect(log);
+        snap = snap with { Health = health };
+    }
+    catch (Exception ex)
+    {
+        log.Warn($"Health metrics collection failed: {ex.Message}");
+    }
         return snap;
     }
 

@@ -5,7 +5,8 @@ param(
     [Parameter(Mandatory=$true)][string]$LogFile,
     [Parameter(Mandatory=$true)][string]$ContextJson,
     [string]$TargetContextJson = "",
-    [ValidateSet("true","false")][string]$EliteRisk = "false"
+    [ValidateSet("true","false")][string]$EliteRisk = "false",
+    [ValidateSet("true","false")][string]$CleanStandby = "false"
 )
 
 . (Join-Path $PSScriptRoot "_Common.ps1")
@@ -18,6 +19,7 @@ $sysProfile = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\Sys
 $gamesTask  = Join-Path $sysProfile "Tasks\Games"
 $memMgmt    = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management"
 $memThrottle = Join-Path $memMgmt "Throttle"
+$priorityCtrl = "HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl"
 
 if ($Mode -eq "Rollback") {
     if (-not $TargetContextJson) { Write-Log -Level "ERROR" -Message "Rollback requires -TargetContextJson"; exit 2 }
@@ -28,6 +30,8 @@ if ($Mode -eq "Rollback") {
     Rollback-RegistryFromChanges -TargetCtx $target -PrefixMatch "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"
     Rollback-RegistryFromChanges -TargetCtx $target -PrefixMatch $memMgmt
     Rollback-RegistryFromChanges -TargetCtx $target -PrefixMatch $memThrottle
+    Rollback-RegistryFromChanges -TargetCtx $target -PrefixMatch $priorityCtrl
+    Rollback-ServicesFromChanges -TargetCtx $target -ServiceNames @("SysMain")
     exit 0
 }
 
@@ -52,6 +56,12 @@ Set-RegistryString -Ctx $ctx -Path $gamesTask -Name "SFIO Priority" -Value "High
 Set-RegistryDword -Ctx $ctx -Path $memMgmt -Name "LargeSystemCache" -Value 1 -Note "Enable large system cache (server-like file cache behavior)"
 Set-RegistryDword -Ctx $ctx -Path $memMgmt -Name "DisablePagingExecutive" -Value 1 -Note "Keep kernel/system code resident in memory (reduce paging)"
 
+# I/O priority for foreground (Win32PrioritySeparation)
+Set-RegistryDword -Ctx $ctx -Path $priorityCtrl -Name "Win32PrioritySeparation" -Value 26 -Note "Favor foreground responsiveness / I/O"
+
+# Disable SysMain (Superfetch) to reduce unnecessary I/O latency on SSD
+Set-ServiceSafe -Ctx $ctx -Name "SysMain" -StartupType "Disabled" -Action "Stop" -Note "Disable SysMain (Superfetch) for low-latency I/O"
+
 if ($EliteRisk -eq "true") {
     Write-Log "Elite Risk profile ENABLED: applying Spectre/Meltdown mitigation overrides (higher performance, higher risk)."
     # FeatureSettingsOverride / Mask = 3 => disable key mitigations per Microsoft docs.
@@ -65,6 +75,22 @@ if ($EliteRisk -eq "true") {
     }
 } else {
     Write-Log "Elite Risk profile DISABLED: CPU security mitigations preserved."
+}
+
+if ($CleanStandby -eq "true") {
+    try {
+        $exe = Join-Path $WorkspaceRoot "NovaisFPS.exe"
+        if (-not (Test-Path $exe)) { $exe = Join-Path $WorkspaceRoot "bin\\Release\\net8.0-windows\\NovaisFPS.exe" }
+        if (Test-Path $exe) {
+            Write-Log "Invoking MemoryCleaner (standby list purge)..."
+            $p = Start-Process -FilePath $exe -ArgumentList "--memory-clean" -Wait -PassThru -WindowStyle Hidden
+            Write-Log "MemoryCleaner exit code: $($p.ExitCode)"
+        } else {
+            Write-Log -Level "WARN" -Message "NovaisFPS.exe not found to run --memory-clean"
+        }
+    } catch {
+        Write-Log -Level "WARN" -Message "MemoryCleaner invocation failed: $($_.Exception.Message)"
+    }
 }
 
 Save-JsonFile -Obj $ctx -Path $ContextJson

@@ -13,6 +13,27 @@ if (args.Length > 0)
         var code = MSIEnforcer.Run(helperLog);
         Environment.Exit(code);
     }
+
+    if (string.Equals(args[0], "--memory-clean", StringComparison.OrdinalIgnoreCase))
+    {
+        var root = AppContext.BaseDirectory;
+        Directory.CreateDirectory(Path.Combine(root, "Logs"));
+        var logPath = Path.Combine(root, "Logs", $"memoryclean-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log");
+        var helperLog = new Logger(logPath);
+        var code = MemoryCleaner.PurgeStandby(helperLog);
+        Environment.Exit(code);
+    }
+
+    if (string.Equals(args[0], "--health", StringComparison.OrdinalIgnoreCase))
+    {
+        var root = AppContext.BaseDirectory;
+        Directory.CreateDirectory(Path.Combine(root, "Logs"));
+        var logPath = Path.Combine(root, "Logs", $"health-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log");
+        var helperLog = new Logger(logPath);
+        var snap = HealthMetrics.Collect(helperLog);
+        helperLog.Info($"Health: DPC={snap.DpcPercent}% ISR={snap.IsrPercent}% TimerRes current={snap.CurrentTimerResolutionMs}ms min={snap.MinTimerResolutionMs}ms max={snap.MaxTimerResolutionMs}ms");
+        Environment.Exit(0);
+    }
 }
 
 static void ClearAndBanner()

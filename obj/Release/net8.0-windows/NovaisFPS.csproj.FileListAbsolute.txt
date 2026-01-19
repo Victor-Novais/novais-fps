@@ -18,3 +18,10 @@ C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\obj\Release\net8.0-windows\
 C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\obj\Release\net8.0-windows\NovaisFPS.genruntimeconfig.cache
 C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\obj\Release\net8.0-windows\ref\NovaisFPS.dll
 C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\obj\Release\net8.0-windows\NovaisFPS.sourcelink.json
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\System.Configuration.ConfigurationManager.dll
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\System.Diagnostics.EventLog.dll
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\System.Diagnostics.PerformanceCounter.dll
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\System.Security.Cryptography.ProtectedData.dll
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\runtimes\win\lib\net8.0\System.Diagnostics.EventLog.Messages.dll
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\runtimes\win\lib\net8.0\System.Diagnostics.EventLog.dll
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\runtimes\win\lib\net8.0\System.Diagnostics.PerformanceCounter.dll
