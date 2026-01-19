@@ -23,7 +23,7 @@ if ($null -eq $ctx) { $ctx = [pscustomobject]@{} }
 
 Write-Log "Creating system restore point (Checkpoint-Computer)..."
 try {
-    # Type: MODIFY_SETTINGS keeps it within Windows limits
+    
     Checkpoint-Computer -Description "NOVAIS FPS ($RunId)" -RestorePointType "MODIFY_SETTINGS" | Out-Null
     Add-Change -Ctx $ctx -Category "backup" -Key "restorePoint" -Before $null -After "Created" -Note "Checkpoint-Computer"
     Write-Log "Restore point created."
