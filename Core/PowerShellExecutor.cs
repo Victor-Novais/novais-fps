@@ -35,15 +35,24 @@ public sealed class PowerShellExecutor
         Dictionary<string, string>? extraArgs = null,
         int timeoutMs = 10 * 60 * 1000)
     {
+        // Validate script path exists
+        if (!File.Exists(scriptPath))
+        {
+            _log.Error($"Script not found: {scriptPath}");
+            return new PowerShellResult { ExitCode = 2, StdErr = $"Script file not found: {scriptPath}" };
+        }
+
         var ps = ResolvePowerShell();
         if (string.IsNullOrWhiteSpace(ps))
             return new PowerShellResult { ExitCode = 127, StdErr = "No PowerShell found (pwsh/powershell)." };
 
+        // Build arguments: ExecutionPolicy Bypass MUST come early to avoid policy restrictions
+        // Order matters: -ExecutionPolicy Bypass should be before -File
         var args = new List<string>
         {
+            "-ExecutionPolicy", "Bypass",
             "-NoLogo",
             "-NoProfile",
-            "-ExecutionPolicy", "Bypass",
             "-File", Quote(scriptPath),
             "-Mode", Quote(mode),
             "-RunId", Quote(ctx.RunId),
@@ -73,7 +82,9 @@ public sealed class PowerShellExecutor
             StandardErrorEncoding = Encoding.UTF8
         };
 
+        var fullCmdLine = $"{ps} {string.Join(" ", args)}";
         _log.Info($"Running script: {Path.GetFileName(scriptPath)} (Mode={mode}, PS={ps})");
+        _log.Debug($"Full command: {fullCmdLine}");
 
         using var p = new Process { StartInfo = psi };
         var sbOut = new StringBuilder();

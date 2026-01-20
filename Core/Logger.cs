@@ -16,6 +16,7 @@ public sealed class Logger
     public void Info(string message) => Write("INFO", message);
     public void Warn(string message) => Write("WARN", message);
     public void Error(string message) => Write("ERROR", message);
+    public void Debug(string message) => Write("DEBUG", message);
 
     public void Write(string level, string message)
     {
@@ -27,6 +28,7 @@ public sealed class Logger
         }
     }
 }
+
 
 
 
