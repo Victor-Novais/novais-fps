@@ -18,3 +18,5 @@ public static class JsonOutput
     public static void WriteJson<T>(T obj) => Console.WriteLine(ToJson(obj));
 }
 
+
+

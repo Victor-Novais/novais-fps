@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using NovaisFPS.Core;
 
@@ -60,6 +61,70 @@ static bool Confirm(string prompt)
     return key.Key is ConsoleKey.Y;
 }
 
+// Desbloqueio automático de scripts .ps1 na pasta Scripts (remove Zone.Identifier)
+static void TryUnblockScripts(string scriptsDir, Logger log)
+{
+    try
+    {
+        if (!Directory.Exists(scriptsDir))
+        {
+            log.Warn($"Scripts directory not found: {scriptsDir}");
+            return;
+        }
+
+        var systemRoot = Environment.GetEnvironmentVariable("SystemRoot") ?? @"C:\Windows";
+        var psPath = Path.Combine(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+
+        if (!File.Exists(psPath))
+        {
+            log.Warn($"PowerShell not found at {psPath}; skipping automatic unblock.");
+            return;
+        }
+
+        // Escapa o caminho para uso no comando PowerShell
+        var escapedPath = scriptsDir.Replace("'", "''");
+        var command = $"Get-ChildItem -Path '{escapedPath}' -Filter '*.ps1' -Recurse | Unblock-File -ErrorAction SilentlyContinue";
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = psPath,
+            Arguments = $"-NoLogo -NoProfile -ExecutionPolicy Bypass -Command \"{command}\"",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+
+        using var p = Process.Start(psi);
+        if (p == null)
+        {
+            log.Warn("Failed to start PowerShell process for Unblock-File.");
+            return;
+        }
+
+        if (!p.WaitForExit(30000))
+        {
+            try { p.Kill(entireProcessTree: true); } catch { }
+            log.Warn("Timeout executing Unblock-File; some scripts may remain blocked.");
+            return;
+        }
+
+        if (p.ExitCode != 0)
+        {
+            var err = p.StandardError.ReadToEnd();
+            log.Warn($"Unblock-File returned exit={p.ExitCode}. Stderr: {err}");
+        }
+        else
+        {
+            log.Info("Successfully unblocked all .ps1 scripts in Scripts directory.");
+        }
+    }
+    catch (Exception ex)
+    {
+        log.Warn($"Failed to automatically unblock scripts: {ex.Message}");
+    }
+}
+
 ClearAndBanner();
 
 var workspaceRoot = AppContext.BaseDirectory;
@@ -106,8 +171,10 @@ if (choice == "1")
     eliteRisk = Confirm("Enable Elite Risk profile (NOT recommended for general use)?");
 }
 
-var ps = new PowerShellExecutor(log);
 var scriptsDir = ctx.GetAbsPath("Scripts");
+TryUnblockScripts(scriptsDir, log);
+
+var ps = new PowerShellExecutor(log);
 
 string Script(string name) => Path.Combine(scriptsDir, name);
 

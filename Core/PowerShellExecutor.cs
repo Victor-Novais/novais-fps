@@ -22,9 +22,36 @@ public sealed class PowerShellExecutor
 
     public string ResolvePowerShell()
     {
-        // Prefer PowerShell 7+ (pwsh). Fallback to Windows PowerShell 5.1 to avoid hard-blocking.
-        if (CommandExists("pwsh")) return "pwsh";
-        if (CommandExists("powershell")) return "powershell";
+        // 1) Prioriza Windows PowerShell 64-bit em System32 (evita WoW64 redirection)
+        try
+        {
+            var systemRoot = Environment.GetEnvironmentVariable("SystemRoot") ?? @"C:\Windows";
+            var winPs = Path.Combine(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+            if (File.Exists(winPs))
+            {
+                _log.Debug($"Using 64-bit PowerShell: {winPs}");
+                return winPs;
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Debug($"Failed to resolve System32 PowerShell: {ex.Message}");
+        }
+
+        // 2) Tenta PowerShell 7+ (pwsh), se disponível
+        if (CommandExists("pwsh"))
+        {
+            _log.Debug("Using PowerShell 7+ (pwsh)");
+            return "pwsh";
+        }
+
+        // 3) Por fim, usa "powershell" via PATH
+        if (CommandExists("powershell"))
+        {
+            _log.Debug("Using PowerShell via PATH");
+            return "powershell";
+        }
+
         return "";
     }
 
@@ -46,13 +73,14 @@ public sealed class PowerShellExecutor
         if (string.IsNullOrWhiteSpace(ps))
             return new PowerShellResult { ExitCode = 127, StdErr = "No PowerShell found (pwsh/powershell)." };
 
-        // Build arguments: ExecutionPolicy Bypass MUST come early to avoid policy restrictions
-        // Order matters: -ExecutionPolicy Bypass should be before -File
+        // Build arguments:
+        // -ExecutionPolicy Bypass deve vir antes de -File para evitar restrições de política
+        // -File é o último argumento de engine, com o caminho do script entre aspas duplas
         var args = new List<string>
         {
-            "-ExecutionPolicy", "Bypass",
             "-NoLogo",
             "-NoProfile",
+            "-ExecutionPolicy", "Bypass",
             "-File", Quote(scriptPath),
             "-Mode", Quote(mode),
             "-RunId", Quote(ctx.RunId),
