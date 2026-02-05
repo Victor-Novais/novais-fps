@@ -84,9 +84,46 @@ try {
     Write-Log -Level "WARN" -Message "End-to-end latency monitoring failed: $($_.Exception.Message)"
 }
 
+# PCIe TLP Diagnostics Summary (Zero-Level Optimization)
+Write-Log "================================================================================"
+Write-Log "PCIe TLP Size Diagnostics Summary (Zero-Level Optimization)"
+Write-Log "================================================================================"
+try {
+    $exe = Join-Path $WorkspaceRoot "NovaisFPS.exe"
+    if (-not (Test-Path $exe)) { $exe = Join-Path $WorkspaceRoot "bin\Release\net8.0-windows\NovaisFPS.exe" }
+    if (Test-Path $exe) {
+        Write-Log "Collecting PCIe TLP diagnostics summary..."
+        $proc = Start-Process -FilePath $exe -ArgumentList "--pcie-tlp-diagnose" -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:TEMP\novais_pcietlp_summary.txt" -RedirectStandardError "$env:TEMP\novais_pcietlp_summary.err"
+        if (Test-Path "$env:TEMP\novais_pcietlp_summary.txt") {
+            Get-Content "$env:TEMP\novais_pcietlp_summary.txt" | ForEach-Object { Write-Log $_ }
+        }
+    }
+} catch {
+    Write-Log -Level "WARN" -Message "PCIe TLP diagnostics summary failed: $($_.Exception.Message)"
+}
+
+# Memory Latency Diagnostics Summary (Zero-Level Optimization)
+Write-Log "================================================================================"
+Write-Log "Memory Latency Diagnostics Summary (Zero-Level Optimization)"
+Write-Log "================================================================================"
+try {
+    $exe = Join-Path $WorkspaceRoot "NovaisFPS.exe"
+    if (-not (Test-Path $exe)) { $exe = Join-Path $WorkspaceRoot "bin\Release\net8.0-windows\NovaisFPS.exe" }
+    if (Test-Path $exe) {
+        Write-Log "Collecting memory latency diagnostics summary..."
+        $proc = Start-Process -FilePath $exe -ArgumentList "--memory-latency-diagnose" -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:TEMP\novais_memlatency_summary.txt" -RedirectStandardError "$env:TEMP\novais_memlatency_summary.err"
+        if (Test-Path "$env:TEMP\novais_memlatency_summary.txt") {
+            Get-Content "$env:TEMP\novais_memlatency_summary.txt" | ForEach-Object { Write-Log $_ }
+        }
+    }
+} catch {
+    Write-Log -Level "WARN" -Message "Memory latency diagnostics summary failed: $($_.Exception.Message)"
+}
+
 # Simple textual status
 Write-Log "Reminder: if BCDEdit was applied, reboot may be required to take full effect."
 Write-Log "Reminder: if Kernel Tick Rate was optimized, reboot is REQUIRED for changes to take effect."
+Write-Log "Reminder: Zero-Level optimizations (PCIe TLP, Memory Timings, C-States, Hyper-Threading) require BIOS/UEFI access."
 Write-Log "Validation complete."
 exit 0
 

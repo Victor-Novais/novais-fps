@@ -101,6 +101,61 @@ if (args.Length > 0)
         helperLog.Info($"  Overall Latency Score: {report.OverallLatencyScore:F1}/100");
         Environment.Exit(0);
     }
+
+    if (string.Equals(args[0], "--pcie-tlp-diagnose", StringComparison.OrdinalIgnoreCase))
+    {
+        var root = AppContext.BaseDirectory;
+        Directory.CreateDirectory(Path.Combine(root, "Logs"));
+        var logPath = Path.Combine(root, "Logs", $"pcietlp-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log");
+        var helperLog = new Logger(logPath);
+        var optimizer = new PCIeTLPOptimizer(helperLog);
+        var report = optimizer.CollectDiagnostics();
+        helperLog.Info($"PCIe TLP Diagnostic Report:");
+        helperLog.Info($"  Devices Detected: {report.DevicesDetected}");
+        helperLog.Info($"  Critical Devices (GPU/NVMe): {report.CriticalDevices}");
+        helperLog.Info($"  Recommendations:");
+        foreach (var rec in report.Recommendations)
+        {
+            helperLog.Info($"    Device: {rec.DeviceName}");
+            helperLog.Info($"      Current TLP: {rec.CurrentTLPSize}");
+            helperLog.Info($"      Recommended: {rec.RecommendedTLPSize}");
+            helperLog.Info($"      Reason: {rec.Reason}");
+            helperLog.Info($"      BIOS Location: {rec.BIOSLocation}");
+            helperLog.Info($"      Risk Level: {rec.RiskLevel}");
+            helperLog.Info($"      Benefits: {rec.Benefits}");
+            helperLog.Info($"      Warnings: {rec.Warnings}");
+        }
+        Environment.Exit(0);
+    }
+
+    if (string.Equals(args[0], "--memory-latency-diagnose", StringComparison.OrdinalIgnoreCase))
+    {
+        var root = AppContext.BaseDirectory;
+        Directory.CreateDirectory(Path.Combine(root, "Logs"));
+        var logPath = Path.Combine(root, "Logs", $"memlatency-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log");
+        var helperLog = new Logger(logPath);
+        var optimizer = new MemoryLatencyOptimizer(helperLog);
+        var report = optimizer.CollectDiagnostics();
+        helperLog.Info($"Memory Latency Diagnostic Report:");
+        helperLog.Info($"  Modules Detected: {report.ModulesDetected}");
+        if (report.BenchmarkResult != null)
+        {
+            helperLog.Info($"  Benchmark Latency: {report.BenchmarkResult.AverageLatencyMs:F3}ms ({report.BenchmarkResult.AverageLatencyNs:F0}ns)");
+        }
+        helperLog.Info($"  Recommendations:");
+        foreach (var rec in report.Recommendations)
+        {
+            helperLog.Info($"    Module: {rec.ModuleInfo.Manufacturer} {rec.ModuleInfo.PartNumber}");
+            helperLog.Info($"      Speed: {rec.ModuleInfo.Speed} MHz, XMP: {rec.ModuleInfo.XMPEnabled}");
+            helperLog.Info($"      Current Latency: {(rec.CurrentLatency > 0 ? $"{rec.CurrentLatency:F3}ms" : "Unknown")}");
+            helperLog.Info($"      Recommended Timings: {rec.RecommendedTimings}");
+            helperLog.Info($"      BIOS Location: {rec.BIOSLocation}");
+            helperLog.Info($"      Risk Level: {rec.RiskLevel}");
+            helperLog.Info($"      Benefits: {rec.Benefits}");
+            helperLog.Info($"      Warnings: {rec.Warnings}");
+        }
+        Environment.Exit(0);
+    }
 }
 
 static void ClearAndBanner()
@@ -376,11 +431,21 @@ if (enableNVMe)
     Console.WriteLine("data loss if power is lost. Only enable if you have backups and reliable power.");
     aggressiveNVMeWriteCache = Confirm("Enable aggressive write cache mode (RISKY, opt-in)?");
 }
+Console.WriteLine();
+Console.WriteLine("================================================================================");
+Console.WriteLine("EXTREME RISK: Core Isolation / Memory Integrity Disable (Zero-Level)");
+Console.WriteLine("================================================================================");
+Console.WriteLine("WARNING: Disabling Core Isolation and Memory Integrity removes critical security");
+Console.WriteLine("protections. This may provide a small performance benefit but SIGNIFICANTLY");
+Console.WriteLine("increases security risk. NOT RECOMMENDED for most users.");
+Console.WriteLine("================================================================================");
+var disableCoreIsolation = Confirm("Disable Core Isolation/Memory Integrity (EXTREME RISK, opt-in)?");
 var reg9Args = new Dictionary<string, string>
 {
     ["-EliteRisk"] = eliteRisk ? "true" : "false",
     ["-EnableNVMeOptimization"] = enableNVMe ? "true" : "false",
-    ["-AggressiveNVMeWriteCache"] = aggressiveNVMeWriteCache ? "true" : "false"
+    ["-AggressiveNVMeWriteCache"] = aggressiveNVMeWriteCache ? "true" : "false",
+    ["-DisableCoreIsolation"] = disableCoreIsolation ? "true" : "false"
 };
 r = ps.RunScript(Script("09_RegistryTweaks.ps1"), "Apply", ctx, extraArgs: reg9Args);
 if (!r.Success) return;

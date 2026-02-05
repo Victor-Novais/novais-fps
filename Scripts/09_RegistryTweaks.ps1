@@ -8,7 +8,8 @@ param(
     [ValidateSet("true","false")][string]$EliteRisk = "false",
     [ValidateSet("true","false")][string]$CleanStandby = "false",
     [ValidateSet("true","false")][string]$EnableNVMeOptimization = "false",
-    [ValidateSet("true","false")][string]$AggressiveNVMeWriteCache = "false"
+    [ValidateSet("true","false")][string]$AggressiveNVMeWriteCache = "false",
+    [ValidateSet("true","false")][string]$DisableCoreIsolation = "false"
 )
 
 . (Join-Path $PSScriptRoot "_Common.ps1")
@@ -78,6 +79,57 @@ if ($EliteRisk -eq "true") {
     }
 } else {
     Write-Log "Elite Risk profile DISABLED: CPU security mitigations preserved."
+}
+
+# Core Isolation / Memory Integrity Disable (Elite Risk - Zero-Level Optimization)
+if ($DisableCoreIsolation -eq "true") {
+    Write-Log "================================================================================"
+    Write-Log "EXTREME RISK: Core Isolation / Memory Integrity Disable (Zero-Level Optimization)"
+    Write-Log "================================================================================"
+    Write-Log "WARNING: Disabling Core Isolation and Memory Integrity removes critical security"
+    Write-Log "protections that prevent malware from accessing kernel memory. This optimization"
+    Write-Log "may provide a small performance benefit but SIGNIFICANTLY increases security risk."
+    Write-Log ""
+    Write-Log "RISKS:"
+    Write-Log "  - System becomes vulnerable to kernel-level malware attacks"
+    Write-Log "  - Reduced protection against advanced persistent threats (APTs)"
+    Write-Log "  - May violate security policies in enterprise environments"
+    Write-Log "  - NOT RECOMMENDED for systems connected to untrusted networks"
+    Write-Log "================================================================================"
+    
+    try {
+        $coreIsolationPath = "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity"
+        $memoryIntegrityPath = "HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity"
+        
+        # Check current status
+        $currentCoreIsolation = Get-RegistryValueSafe -Path $coreIsolationPath -Name "Enabled"
+        $currentMemoryIntegrity = Get-RegistryValueSafe -Path $memoryIntegrityPath -Name "Enabled"
+        
+        Write-Log "Current Core Isolation status: $currentCoreIsolation"
+        Write-Log "Current Memory Integrity status: $currentMemoryIntegrity"
+        
+        if ($currentCoreIsolation -eq 1 -or $currentMemoryIntegrity -eq 1) {
+            Write-Log "Disabling Core Isolation and Memory Integrity..."
+            
+            # Disable Core Isolation
+            Set-RegistryDword -Ctx $ctx -Path $coreIsolationPath -Name "Enabled" -Value 0 -Note "Disable Core Isolation (EXTREME RISK - reduces security)"
+            
+            # Disable Memory Integrity
+            Set-RegistryDword -Ctx $ctx -Path $memoryIntegrityPath -Name "Enabled" -Value 0 -Note "Disable Memory Integrity (EXTREME RISK - reduces security)"
+            
+            Write-Log "Core Isolation and Memory Integrity DISABLED."
+            Write-Log "WARNING: A system restart is REQUIRED for changes to take effect."
+            Write-Log "WARNING: Your system is now more vulnerable to kernel-level attacks."
+        } else {
+            Write-Log "Core Isolation and Memory Integrity are already DISABLED."
+        }
+    } catch {
+        Write-Log -Level "WARN" -Message "Core Isolation/Memory Integrity configuration failed: $($_.Exception.Message)"
+        Write-Log "NOTE: Core Isolation can also be disabled via:"
+        Write-Log "  Windows Security → Device Security → Core Isolation → Memory Integrity (Off)"
+    }
+} else {
+    Write-Log "Core Isolation/Memory Integrity management skipped (user opted out)"
 }
 
 if ($CleanStandby -eq "true") {
