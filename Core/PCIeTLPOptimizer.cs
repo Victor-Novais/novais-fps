@@ -1,5 +1,6 @@
 using System.Management;
 using System.Runtime.Versioning;
+using System.Text;
 
 namespace NovaisFPS.Core;
 
@@ -122,10 +123,33 @@ public sealed class PCIeTLPOptimizer
             BIOSLocation = GetBIOSLocation(device),
             RiskLevel = "Low (if done correctly)",
             Benefits = GetBenefits(device),
-            Warnings = GetWarnings(device)
+            Warnings = GetWarnings(device),
+            ManualSteps = GetManualSteps(device)
         };
 
         return recommendation;
+    }
+    
+    /// <summary>
+    /// Gets comprehensive diagnostics and recommendations for all PCIe devices.
+    /// </summary>
+    public TLPDiagnosticsResult GetDiagnosticsAndRecommendations()
+    {
+        var devices = DetectPCIeDevices();
+        var recommendations = new List<TLPRecommendation>();
+        
+        foreach (var device in devices.Where(d => d.IsGPU || d.IsNVMe))
+        {
+            recommendations.Add(GenerateRecommendation(device));
+        }
+        
+        return new TLPDiagnosticsResult
+        {
+            DevicesDetected = devices.Count,
+            CriticalDevices = devices.Count(d => d.IsGPU || d.IsNVMe),
+            Recommendations = recommendations,
+            Timestamp = DateTime.UtcNow
+        };
     }
 
     private string GetRecommendedTLPSize(PCIeDeviceInfo device)
@@ -183,7 +207,71 @@ public sealed class PCIeTLPOptimizer
     private string GetWarnings(PCIeDeviceInfo device)
     {
         return "Incorrect TLP configuration may cause system instability, PCIe link failures, or device detection issues. " +
-               "Always test stability after changes. Some systems may not support custom TLP sizes.";
+               "Always test stability after changes. Some systems may not support custom TLP sizes. " +
+               "If you experience issues after changing TLP size, revert to default (usually 256 bytes) in BIOS/UEFI.";
+    }
+    
+    private string GetManualSteps(PCIeDeviceInfo device)
+    {
+        var vendor = GetMotherboardVendor();
+        var steps = new StringBuilder();
+        
+        steps.AppendLine("Manual BIOS/UEFI Configuration Steps:");
+        steps.AppendLine("");
+        steps.AppendLine("1. Restart your computer and enter BIOS/UEFI setup:");
+        steps.AppendLine("   - Common keys: F2, F10, DEL, ESC (varies by manufacturer)");
+        steps.AppendLine("   - Look for message during boot: 'Press [KEY] to enter setup'");
+        steps.AppendLine("");
+        steps.AppendLine($"2. Navigate to PCIe configuration (varies by vendor):");
+        
+        if (vendor.Contains("ASUS", StringComparison.OrdinalIgnoreCase))
+        {
+            steps.AppendLine("   - ASUS: Advanced → PCI Subsystem Settings → PCIe TLP Size");
+        }
+        else if (vendor.Contains("MSI", StringComparison.OrdinalIgnoreCase))
+        {
+            steps.AppendLine("   - MSI: Advanced → PCI Subsystem Settings → PCIe TLP Size");
+        }
+        else if (vendor.Contains("Gigabyte", StringComparison.OrdinalIgnoreCase))
+        {
+            steps.AppendLine("   - Gigabyte: Advanced → PCIe Configuration → TLP Size");
+        }
+        else if (vendor.Contains("ASRock", StringComparison.OrdinalIgnoreCase))
+        {
+            steps.AppendLine("   - ASRock: Advanced → Chipset Configuration → PCIe TLP Size");
+        }
+        else
+        {
+            steps.AppendLine("   - Look for: Advanced → PCIe Configuration → TLP Size (or similar)");
+        }
+        
+        steps.AppendLine("");
+        steps.AppendLine($"3. Set TLP Size to: {GetRecommendedTLPSize(device)}");
+        steps.AppendLine("");
+        steps.AppendLine("4. Save changes and exit BIOS/UEFI (usually F10)");
+        steps.AppendLine("");
+        steps.AppendLine("5. Restart computer and test system stability");
+        steps.AppendLine("");
+        steps.AppendLine("6. To revert: Repeat steps 1-4 and set TLP Size back to default (usually 256 bytes)");
+        steps.AppendLine("");
+        steps.AppendLine("NOTE: Some motherboards may not expose TLP size settings. In this case, " +
+                        "the setting may be controlled by the GPU/NVMe firmware or not be adjustable.");
+        
+        return steps.ToString();
+    }
+    
+    private string GetMotherboardVendor()
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_BaseBoard");
+            foreach (ManagementObject obj in searcher.Get())
+            {
+                return obj["Manufacturer"]?.ToString() ?? "Unknown";
+            }
+        }
+        catch { }
+        return "Unknown";
     }
 
     /// <summary>
@@ -234,6 +322,15 @@ public sealed class TLPRecommendation
     public string RiskLevel { get; set; } = "";
     public string Benefits { get; set; } = "";
     public string Warnings { get; set; } = "";
+    public string ManualSteps { get; set; } = "";
+}
+
+public sealed class TLPDiagnosticsResult
+{
+    public DateTime Timestamp { get; set; }
+    public int DevicesDetected { get; set; }
+    public int CriticalDevices { get; set; }
+    public List<TLPRecommendation> Recommendations { get; set; } = new();
 }
 
 public sealed class TLPDiagnosticReport

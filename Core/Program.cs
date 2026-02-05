@@ -297,7 +297,8 @@ TryUnblockScripts(scriptsDir, log);
 
 var ps = new PowerShellExecutor(log);
 
-string Script(string name) => Path.Combine(scriptsDir, name);
+// Script() agora retorna apenas o nome do arquivo - o PowerShellExecutor constrói o caminho completo
+string Script(string name) => name;
 
 if (choice == "3" || string.IsNullOrWhiteSpace(choice))
 {

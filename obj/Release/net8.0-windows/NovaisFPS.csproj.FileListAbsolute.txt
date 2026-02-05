@@ -25,3 +25,14 @@ C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\
 C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\runtimes\win\lib\net8.0\System.Diagnostics.EventLog.Messages.dll
 C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\runtimes\win\lib\net8.0\System.Diagnostics.EventLog.dll
 C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\runtimes\win\lib\net8.0\System.Diagnostics.PerformanceCounter.dll
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\Scripts\01_Backup.ps1
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\Scripts\02_Diagnosis.ps1
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\Scripts\03_SystemPower.ps1
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\Scripts\04_TimersLatency.ps1
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\Scripts\05_CPUScheduler.ps1
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\Scripts\06_GPUDrivers.ps1
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\Scripts\07_InputUSB.ps1
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\Scripts\08_Network.ps1
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\Scripts\09_RegistryTweaks.ps1
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\Scripts\10_Validation.ps1
+C:\Users\steam\OneDrive\Área de Trabalho\NOVAIS FPS\bin\Release\net8.0-windows\Scripts\_Common.ps1

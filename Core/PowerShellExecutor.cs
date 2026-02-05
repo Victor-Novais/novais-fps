@@ -56,16 +56,20 @@ public sealed class PowerShellExecutor
     }
 
     public PowerShellResult RunScript(
-        string scriptPath,
+        string scriptFileName,
         string mode,
         RunContext ctx,
         Dictionary<string, string>? extraArgs = null,
         int timeoutMs = 10 * 60 * 1000)
     {
+        // Constrói o caminho completo do script usando o WorkspaceRoot e ScriptsDir
+        var scriptPath = Path.Combine(ctx.WorkspaceRoot, ctx.ScriptsDir, scriptFileName);
+        
         // Validate script path exists
         if (!File.Exists(scriptPath))
         {
             _log.Error($"Script not found: {scriptPath}");
+            _log.Error($"WorkspaceRoot: {ctx.WorkspaceRoot}, ScriptsDir: {ctx.ScriptsDir}, FileName: {scriptFileName}");
             return new PowerShellResult { ExitCode = 2, StdErr = $"Script file not found: {scriptPath}" };
         }
 
@@ -111,8 +115,9 @@ public sealed class PowerShellExecutor
         };
 
         var fullCmdLine = $"{ps} {string.Join(" ", args)}";
-        _log.Info($"Running script: {Path.GetFileName(scriptPath)} (Mode={mode}, PS={ps})");
+        _log.Info($"Running script: {scriptFileName} (Mode={mode}, PS={ps})");
         _log.Debug($"Full command: {fullCmdLine}");
+        _log.Debug($"Script path: {scriptPath}");
 
         using var p = new Process { StartInfo = psi };
         var sbOut = new StringBuilder();

@@ -167,26 +167,88 @@ public sealed class MemoryLatencyOptimizer
         // Recommendations based on memory speed and type
         // These are general guidelines - actual optimal timings depend on specific memory ICs
 
+        var isAMD = IsAMDPlatform();
+        var isIntel = IsIntelPlatform();
+        
         if (module.Speed >= 3600)
         {
             // High-speed DDR4/DDR5: Focus on tightening secondary timings
-            return "Primary: tCL-1 to tCL-2, tRCD-1, tRP-1, tRAS-2 to tRAS-4. " +
-                   "Secondary: tRFC-10 to tRFC-20, tFAW-2, tWR-2. " +
-                   "Gear Mode: Gear 1 (if supported, lower latency than Gear 2).";
+            var baseTimings = "Primary: tCL-1 to tCL-2, tRCD-1, tRP-1, tRAS-2 to tRAS-4. " +
+                             "Secondary: tRFC-10 to tRFC-20, tFAW-2, tWR-2. ";
+            
+            if (isAMD)
+            {
+                return baseTimings + "AMD-specific: tRFC-10 to tRFC-15, tRTP-4, tWR-8, Gear Mode: Gear 1 (if supported). " +
+                       "Tertiary: tRRDS-4, tRRDL-6, tFAW-16.";
+            }
+            else if (isIntel)
+            {
+                return baseTimings + "Intel-specific: tRFC-10 to tRFC-20, Gear Mode: Gear 1 (if supported). " +
+                       "Tertiary: tRRDS-4, tRRDL-6, tFAW-16, tWTR_S-4, tWTR_L-8.";
+            }
+            
+            return baseTimings + "Gear Mode: Gear 1 (if supported, lower latency than Gear 2).";
         }
         else if (module.Speed >= 3200)
         {
             // Standard DDR4: Moderate tightening
-            return "Primary: tCL-1, tRCD-1, tRP-1, tRAS-2. " +
-                   "Secondary: tRFC-5 to tRFC-15, tFAW-1, tWR-1. " +
-                   "Gear Mode: Gear 1 (if supported).";
+            var baseTimings = "Primary: tCL-1, tRCD-1, tRP-1, tRAS-2. " +
+                             "Secondary: tRFC-5 to tRFC-15, tFAW-1, tWR-1. ";
+            
+            if (isAMD)
+            {
+                return baseTimings + "AMD-specific: tRFC-5 to tRFC-10, tRTP-4, tWR-8, Gear Mode: Gear 1.";
+            }
+            else if (isIntel)
+            {
+                return baseTimings + "Intel-specific: tRFC-5 to tRFC-15, Gear Mode: Gear 1.";
+            }
+            
+            return baseTimings + "Gear Mode: Gear 1 (if supported).";
         }
         else
         {
             // Lower-speed memory: Conservative tightening
-            return "Primary: tCL-1 (if stable), tRCD-0 to tRCD-1, tRP-0 to tRP-1, tRAS-1 to tRAS-2. " +
-                   "Secondary: tRFC-5 to tRFC-10, tFAW-1, tWR-1.";
+            var baseTimings = "Primary: tCL-1 (if stable), tRCD-0 to tRCD-1, tRP-0 to tRP-1, tRAS-1 to tRAS-2. " +
+                             "Secondary: tRFC-5 to tRFC-10, tFAW-1, tWR-1.";
+            
+            if (isAMD)
+            {
+                return baseTimings + " AMD-specific: tRTP-4, tWR-8.";
+            }
+            
+            return baseTimings;
         }
+    }
+    
+    private bool IsAMDPlatform()
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_Processor");
+            foreach (ManagementObject obj in searcher.Get())
+            {
+                var name = obj["Name"]?.ToString() ?? "";
+                return name.Contains("AMD", StringComparison.OrdinalIgnoreCase);
+            }
+        }
+        catch { }
+        return false;
+    }
+    
+    private bool IsIntelPlatform()
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_Processor");
+            foreach (ManagementObject obj in searcher.Get())
+            {
+                var name = obj["Name"]?.ToString() ?? "";
+                return name.Contains("Intel", StringComparison.OrdinalIgnoreCase);
+            }
+        }
+        catch { }
+        return false;
     }
 
     private string GetBIOSLocation()
@@ -198,9 +260,34 @@ public sealed class MemoryLatencyOptimizer
     private string GetWarnings(MemoryModuleInfo module)
     {
         return "WARNING: Incorrect memory timings can cause system instability, boot failures, data corruption, " +
-               "or permanent hardware damage. Always test stability (e.g., MemTest86) after changes. " +
+               "or permanent hardware damage. Always test stability (e.g., MemTest86, HCI MemTest) after changes. " +
                "Start with conservative adjustments and test incrementally. Some memory modules may not support " +
-               "aggressive timing reductions. Ensure adequate cooling as tighter timings may increase heat.";
+               "aggressive timing reductions. Ensure adequate cooling as tighter timings may increase heat. " +
+               "Recommended testing tools: MemTest86 (bootable), HCI MemTest (Windows), TestMem5 (Windows). " +
+               "Test for at least 4-8 hours before considering timings stable.";
+    }
+    
+    /// <summary>
+    /// Gets comprehensive diagnostics and recommendations for memory latency optimization.
+    /// </summary>
+    public MemoryLatencyDiagnosticsResult GetDiagnosticsAndRecommendations()
+    {
+        var modules = DetectMemoryModules();
+        var benchmark = BenchmarkLatency();
+        var recommendations = new List<MemoryTimingRecommendation>();
+
+        foreach (var module in modules)
+        {
+            recommendations.Add(GenerateRecommendation(module, benchmark));
+        }
+
+        return new MemoryLatencyDiagnosticsResult
+        {
+            Timestamp = DateTime.UtcNow,
+            ModulesDetected = modules.Count,
+            BenchmarkResult = benchmark,
+            Recommendations = recommendations
+        };
     }
 
     /// <summary>
@@ -263,6 +350,14 @@ public sealed class MemoryTimingRecommendation
 }
 
 public sealed class MemoryLatencyDiagnosticReport
+{
+    public DateTime Timestamp { get; set; }
+    public int ModulesDetected { get; set; }
+    public MemoryLatencyResult? BenchmarkResult { get; set; }
+    public List<MemoryTimingRecommendation> Recommendations { get; set; } = new();
+}
+
+public sealed class MemoryLatencyDiagnosticsResult
 {
     public DateTime Timestamp { get; set; }
     public int ModulesDetected { get; set; }
