@@ -6,7 +6,9 @@ param(
     [Parameter(Mandatory=$true)][string]$ContextJson,
     [string]$TargetContextJson = "",
     [ValidateSet("true","false")][string]$EliteRisk = "false",
-    [ValidateSet("true","false")][string]$CleanStandby = "false"
+    [ValidateSet("true","false")][string]$CleanStandby = "false",
+    [ValidateSet("true","false")][string]$EnableNVMeOptimization = "false",
+    [ValidateSet("true","false")][string]$AggressiveNVMeWriteCache = "false"
 )
 
 . (Join-Path $PSScriptRoot "_Common.ps1")
@@ -92,6 +94,41 @@ if ($CleanStandby -eq "true") {
     } catch {
         Write-Log -Level "WARN" -Message "MemoryCleaner invocation failed: $($_.Exception.Message)"
     }
+}
+
+# NVMe Optimization (Elite Competitive Feature)
+if ($EnableNVMeOptimization -eq "true") {
+    Write-Log "Applying NVMe optimizations (Elite Competitive)..."
+    if ($AggressiveNVMeWriteCache -eq "true") {
+        Write-Log "WARNING: Aggressive write cache settings may increase risk of data loss on power failure!"
+        Write-Log "Ensure you have backups and a reliable power supply before proceeding."
+    }
+    try {
+        $exe = Join-Path $WorkspaceRoot "NovaisFPS.exe"
+        if (-not (Test-Path $exe)) { $exe = Join-Path $WorkspaceRoot "bin\Release\net8.0-windows\NovaisFPS.exe" }
+        if (Test-Path $exe) {
+            $nvmeArgs = "--nvme-optimize"
+            if ($AggressiveNVMeWriteCache -eq "true") {
+                $nvmeArgs += " --nvme-aggressive-write"
+            }
+            Write-Log "Invoking NVMeOptimizer..."
+            $proc = Start-Process -FilePath $exe -ArgumentList $nvmeArgs -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:TEMP\novais_nvme.txt" -RedirectStandardError "$env:TEMP\novais_nvme.err"
+            if (Test-Path "$env:TEMP\novais_nvme.txt") {
+                Get-Content "$env:TEMP\novais_nvme.txt" | ForEach-Object { Write-Log $_ }
+            }
+            if ($proc.ExitCode -eq 0) {
+                Write-Log "NVMe optimization applied successfully"
+            } else {
+                Write-Log -Level "WARN" -Message "NVMe optimization returned exit code $($proc.ExitCode)"
+            }
+        } else {
+            Write-Log -Level "WARN" -Message "NovaisFPS.exe not found to run --nvme-optimize"
+        }
+    } catch {
+        Write-Log -Level "WARN" -Message "NVMe optimization failed: $($_.Exception.Message)"
+    }
+} else {
+    Write-Log "NVMe optimization skipped (user opted out)"
 }
 
 Save-JsonFile -Obj $ctx -Path $ContextJson

@@ -5,7 +5,8 @@ param(
     [Parameter(Mandatory=$true)][string]$LogFile,
     [Parameter(Mandatory=$true)][string]$ContextJson,
     [string]$TargetContextJson = "",
-    [ValidateSet("true","false")][string]$EnableBcdTweaks = "false"
+    [ValidateSet("true","false")][string]$EnableBcdTweaks = "false",
+    [ValidateSet("true","false")][string]$EnableKernelTickOptimization = "false"
 )
 
 . (Join-Path $PSScriptRoot "_Common.ps1")
@@ -68,6 +69,36 @@ try {
     }
 } catch {
     Write-Log -Level "WARN" -Message "Failed to invoke TimerResolution.exe: $($_.Exception.Message)"
+}
+
+# Kernel Tick Rate Optimization (Elite Competitive Feature)
+if ($EnableKernelTickOptimization -eq "true") {
+    Write-Log "Applying Kernel Tick Rate optimization (Elite Competitive)..."
+    Write-Log "WARNING: This will modify kernel tick rate to 0.5ms, which may increase CPU usage."
+    Write-Log "A reboot will be REQUIRED for changes to take effect."
+    try {
+        $exe = Join-Path $WorkspaceRoot "NovaisFPS.exe"
+        if (-not (Test-Path $exe)) { $exe = Join-Path $WorkspaceRoot "bin\Release\net8.0-windows\NovaisFPS.exe" }
+        if (Test-Path $exe) {
+            Write-Log "Invoking KernelTickOptimizer..."
+            $proc = Start-Process -FilePath $exe -ArgumentList "--kernel-tick" -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:TEMP\novais_kerneltick.txt" -RedirectStandardError "$env:TEMP\novais_kerneltick.err"
+            if (Test-Path "$env:TEMP\novais_kerneltick.txt") {
+                Get-Content "$env:TEMP\novais_kerneltick.txt" | ForEach-Object { Write-Log $_ }
+            }
+            if ($proc.ExitCode -eq 0) {
+                Write-Log "Kernel Tick Rate optimization applied successfully"
+                Write-Log "REMINDER: Reboot required for kernel tick rate changes to take effect."
+            } else {
+                Write-Log -Level "WARN" -Message "Kernel Tick Rate optimization returned exit code $($proc.ExitCode)"
+            }
+        } else {
+            Write-Log -Level "WARN" -Message "NovaisFPS.exe not found to run --kernel-tick"
+        }
+    } catch {
+        Write-Log -Level "WARN" -Message "Kernel Tick Rate optimization failed: $($_.Exception.Message)"
+    }
+} else {
+    Write-Log "Kernel Tick Rate optimization skipped (user opted out)"
 }
 
 Save-JsonFile -Obj $ctx -Path $ContextJson

@@ -60,8 +60,33 @@ try {
     Write-Log -Level "WARN" -Message "Health metrics collection failed: $($_.Exception.Message)"
 }
 
+# End-to-End Latency Monitoring (Elite Competitive Feature)
+try {
+    $exe = Join-Path $WorkspaceRoot "NovaisFPS.exe"
+    if (-not (Test-Path $exe)) { $exe = Join-Path $WorkspaceRoot "bin\Release\net8.0-windows\NovaisFPS.exe" }
+    if (Test-Path $exe) {
+        Write-Log "Collecting end-to-end latency metrics (--latency)..."
+        $proc = Start-Process -FilePath $exe -ArgumentList "--latency" -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:TEMP\novais_latency.txt" -RedirectStandardError "$env:TEMP\novais_latency.err"
+        if (Test-Path "$env:TEMP\novais_latency.txt") {
+            Get-Content "$env:TEMP\novais_latency.txt" | ForEach-Object { Write-Log $_ }
+        } else {
+            Write-Log -Level "WARN" -Message "Latency output file not found."
+        }
+        if ($proc.ExitCode -eq 0) {
+            Write-Log "End-to-end latency metrics collected successfully"
+        } else {
+            Write-Log -Level "WARN" -Message "Latency monitoring returned exit code $($proc.ExitCode)"
+        }
+    } else {
+        Write-Log -Level "WARN" -Message "NovaisFPS.exe not found to run --latency."
+    }
+} catch {
+    Write-Log -Level "WARN" -Message "End-to-end latency monitoring failed: $($_.Exception.Message)"
+}
+
 # Simple textual status
 Write-Log "Reminder: if BCDEdit was applied, reboot may be required to take full effect."
+Write-Log "Reminder: if Kernel Tick Rate was optimized, reboot is REQUIRED for changes to take effect."
 Write-Log "Validation complete."
 exit 0
 

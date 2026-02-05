@@ -35,6 +35,72 @@ if (args.Length > 0)
         helperLog.Info($"Health: DPC={snap.DpcPercent}% ISR={snap.IsrPercent}% TimerRes current={snap.CurrentTimerResolutionMs}ms min={snap.MinTimerResolutionMs}ms max={snap.MaxTimerResolutionMs}ms");
         Environment.Exit(0);
     }
+
+    if (string.Equals(args[0], "--interrupt-numa", StringComparison.OrdinalIgnoreCase))
+    {
+        var root = AppContext.BaseDirectory;
+        Directory.CreateDirectory(Path.Combine(root, "Logs"));
+        var logPath = Path.Combine(root, "Logs", $"interruptnuma-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log");
+        var helperLog = new Logger(logPath);
+        var optimizer = new InterruptNUMAOptimizer(helperLog);
+        var result = optimizer.ApplyOptimizations(optIn: true);
+        helperLog.Info($"Interrupt Steering: Success={result.Success}, Message={result.Message}, Devices={result.DevicesDetected}, NUMA Nodes={result.NUMANodes}");
+        Environment.Exit(result.Success ? 0 : 1);
+    }
+
+    if (string.Equals(args[0], "--kernel-tick", StringComparison.OrdinalIgnoreCase))
+    {
+        var root = AppContext.BaseDirectory;
+        Directory.CreateDirectory(Path.Combine(root, "Logs"));
+        var logPath = Path.Combine(root, "Logs", $"kerneltick-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log");
+        var helperLog = new Logger(logPath);
+        var optimizer = new KernelTickOptimizer(helperLog);
+        var result = optimizer.ApplyOptimizations(optIn: true);
+        helperLog.Info($"Kernel Tick Rate: Success={result.Success}, Message={result.Message}, TickRate={result.TickRateMicroseconds}μs");
+        Environment.Exit(result.Success ? 0 : 1);
+    }
+
+    if (string.Equals(args[0], "--nvme-optimize", StringComparison.OrdinalIgnoreCase))
+    {
+        var root = AppContext.BaseDirectory;
+        Directory.CreateDirectory(Path.Combine(root, "Logs"));
+        var logPath = Path.Combine(root, "Logs", $"nvme-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log");
+        var helperLog = new Logger(logPath);
+        var optimizer = new NVMeOptimizer(helperLog);
+        bool aggressiveWriteCache = args.Length > 1 && string.Equals(args[1], "--nvme-aggressive-write", StringComparison.OrdinalIgnoreCase);
+        var result = optimizer.ApplyOptimizations(optIn: true, aggressiveWriteCache: aggressiveWriteCache);
+        helperLog.Info($"NVMe Optimization: Success={result.Success}, Message={result.Message}, Devices={result.DevicesDetected}");
+        Environment.Exit(result.Success ? 0 : 1);
+    }
+
+    if (string.Equals(args[0], "--gpu-power-limit", StringComparison.OrdinalIgnoreCase))
+    {
+        var root = AppContext.BaseDirectory;
+        Directory.CreateDirectory(Path.Combine(root, "Logs"));
+        var logPath = Path.Combine(root, "Logs", $"gpupower-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log");
+        var helperLog = new Logger(logPath);
+        var manager = new GPUPowerManager(helperLog);
+        var result = manager.ApplyMaximumPowerLimit(optIn: true);
+        helperLog.Info($"GPU Power Limit: Success={result.Success}, Message={result.Message}, Devices={result.DevicesDetected}");
+        Environment.Exit(result.Success ? 0 : 1);
+    }
+
+    if (string.Equals(args[0], "--latency", StringComparison.OrdinalIgnoreCase))
+    {
+        var root = AppContext.BaseDirectory;
+        Directory.CreateDirectory(Path.Combine(root, "Logs"));
+        var logPath = Path.Combine(root, "Logs", $"latency-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log");
+        var helperLog = new Logger(logPath);
+        var monitor = new EndToEndLatencyMonitor(helperLog);
+        var report = monitor.CollectComprehensiveMetrics();
+        helperLog.Info($"End-to-End Latency Report:");
+        helperLog.Info($"  Input Latency: {report.InputLatency.AverageMs:F3}ms (samples: {report.InputLatency.SampleCount})");
+        helperLog.Info($"  Frame-to-Photon: {report.FrameToPhotonLatency.AverageMs:F3}ms ({report.FrameToPhotonLatency.VendorAPI})");
+        helperLog.Info($"  DPC: {report.DpcPercent:F2}%, ISR: {report.IsrPercent:F2}%");
+        helperLog.Info($"  Timer Resolution: {report.TimerResolutionMs:F3}ms");
+        helperLog.Info($"  Overall Latency Score: {report.OverallLatencyScore:F1}/100");
+        Environment.Exit(0);
+    }
 }
 
 static void ClearAndBanner()
@@ -254,16 +320,40 @@ if (!r.Success) return;
 
 log.Info("Phase 4/10: Timers and latency (safe defaults; bcdedit optional).");
 var enableBcd = Confirm("Apply BCDEdit timer settings (HPET off / platform tick off)? Reversible, may require reboot");
-var phase4Args = new Dictionary<string, string> { ["-EnableBcdTweaks"] = enableBcd ? "true" : "false" };
+Console.WriteLine();
+Console.WriteLine("Elite Competitive: Kernel Tick Rate optimization reduces kernel timer tick to 0.5ms");
+Console.WriteLine("for ultra-low latency. WARNING: Increases CPU usage and REQUIRES reboot.");
+var enableKernelTick = Confirm("Enable Kernel Tick Rate optimization (Elite Competitive, opt-in)?");
+var phase4Args = new Dictionary<string, string>
+{
+    ["-EnableBcdTweaks"] = enableBcd ? "true" : "false",
+    ["-EnableKernelTickOptimization"] = enableKernelTick ? "true" : "false"
+};
 r = ps.RunScript(Script("04_TimersLatency.ps1"), "Apply", ctx, extraArgs: phase4Args);
 if (!r.Success) return;
 
 log.Info("Phase 5/10: CPU & scheduler (no global affinity).");
-r = ps.RunScript(Script("05_CPUScheduler.ps1"), "Apply", ctx);
+Console.WriteLine();
+Console.WriteLine("Elite Competitive: Interrupt Steering optimizes interrupt routing for critical devices");
+Console.WriteLine("(GPU, NIC, USB) to reduce latency. Requires NUMA-capable system.");
+var enableInterruptSteering = Confirm("Enable Interrupt Steering optimization (Elite Competitive, opt-in)?");
+var phase5Args = new Dictionary<string, string>
+{
+    ["-EnableInterruptSteering"] = enableInterruptSteering ? "true" : "false"
+};
+r = ps.RunScript(Script("05_CPUScheduler.ps1"), "Apply", ctx, extraArgs: phase5Args);
 if (!r.Success) return;
 
 log.Info("Phase 6/10: GPU & drivers (safe guidance + non-invasive toggles only).");
-ps.RunScript(Script("06_GPUDrivers.ps1"), "Apply", ctx);
+Console.WriteLine();
+Console.WriteLine("Elite Competitive: GPU Power Limit optimization sets GPU power limit to maximum");
+Console.WriteLine("for peak performance during gaming. Requires MSI Afterburner or vendor tools.");
+var enableGPUPowerLimit = Confirm("Enable GPU Power Limit optimization (Elite Competitive, opt-in)?");
+var phase6Args = new Dictionary<string, string>
+{
+    ["-EnableGPUPowerLimit"] = enableGPUPowerLimit ? "true" : "false"
+};
+ps.RunScript(Script("06_GPUDrivers.ps1"), "Apply", ctx, extraArgs: phase6Args);
 
 log.Info("Phase 7/10: Input (USB/HID power saving off).");
 r = ps.RunScript(Script("07_InputUSB.ps1"), "Apply", ctx);
@@ -274,7 +364,24 @@ r = ps.RunScript(Script("08_Network.ps1"), "Apply", ctx);
 if (!r.Success) return;
 
 log.Info("Phase 9/10: Registry advanced (reversible).");
-var reg9Args = new Dictionary<string, string> { ["-EliteRisk"] = eliteRisk ? "true" : "false" };
+Console.WriteLine();
+Console.WriteLine("Elite Competitive: NVMe optimization configures NVMe SSDs for maximum performance.");
+Console.WriteLine("Aggressive write cache mode improves performance but risks data loss on power failure.");
+var enableNVMe = Confirm("Enable NVMe optimization (Elite Competitive, opt-in)?");
+bool aggressiveNVMeWriteCache = false;
+if (enableNVMe)
+{
+    Console.WriteLine();
+    Console.WriteLine("WARNING: Aggressive write cache disables write cache flushing, which may cause");
+    Console.WriteLine("data loss if power is lost. Only enable if you have backups and reliable power.");
+    aggressiveNVMeWriteCache = Confirm("Enable aggressive write cache mode (RISKY, opt-in)?");
+}
+var reg9Args = new Dictionary<string, string>
+{
+    ["-EliteRisk"] = eliteRisk ? "true" : "false",
+    ["-EnableNVMeOptimization"] = enableNVMe ? "true" : "false",
+    ["-AggressiveNVMeWriteCache"] = aggressiveNVMeWriteCache ? "true" : "false"
+};
 r = ps.RunScript(Script("09_RegistryTweaks.ps1"), "Apply", ctx, extraArgs: reg9Args);
 if (!r.Success) return;
 

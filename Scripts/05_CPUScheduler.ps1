@@ -4,7 +4,8 @@ param(
     [Parameter(Mandatory=$true)][string]$WorkspaceRoot,
     [Parameter(Mandatory=$true)][string]$LogFile,
     [Parameter(Mandatory=$true)][string]$ContextJson,
-    [string]$TargetContextJson = ""
+    [string]$TargetContextJson = "",
+    [ValidateSet("true","false")][string]$EnableInterruptSteering = "false"
 )
 
 . (Join-Path $PSScriptRoot "_Common.ps1")
@@ -85,6 +86,33 @@ function Boost-ProcessPriority {
 # Example (commented by default; user can enable manually):
 # Set-ProcessAffinityToLastCores -ProcessNames @("SearchIndexer","OneDrive") -CoreCountFromEnd 2
 # Boost-ProcessPriority -ProcessName "YourGameExeNameHere" -Priority "High"
+
+# Interrupt Steering and NUMA Optimization (Elite Competitive Feature)
+if ($EnableInterruptSteering -eq "true") {
+    Write-Log "Applying Interrupt Steering and NUMA optimization (Elite Competitive)..."
+    try {
+        $exe = Join-Path $WorkspaceRoot "NovaisFPS.exe"
+        if (-not (Test-Path $exe)) { $exe = Join-Path $WorkspaceRoot "bin\Release\net8.0-windows\NovaisFPS.exe" }
+        if (Test-Path $exe) {
+            Write-Log "Invoking InterruptNUMAOptimizer..."
+            $proc = Start-Process -FilePath $exe -ArgumentList "--interrupt-numa" -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput "$env:TEMP\novais_interrupt.txt" -RedirectStandardError "$env:TEMP\novais_interrupt.err"
+            if (Test-Path "$env:TEMP\novais_interrupt.txt") {
+                Get-Content "$env:TEMP\novais_interrupt.txt" | ForEach-Object { Write-Log $_ }
+            }
+            if ($proc.ExitCode -eq 0) {
+                Write-Log "Interrupt Steering optimization applied successfully"
+            } else {
+                Write-Log -Level "WARN" -Message "Interrupt Steering optimization returned exit code $($proc.ExitCode)"
+            }
+        } else {
+            Write-Log -Level "WARN" -Message "NovaisFPS.exe not found to run --interrupt-numa"
+        }
+    } catch {
+        Write-Log -Level "WARN" -Message "Interrupt Steering optimization failed: $($_.Exception.Message)"
+    }
+} else {
+    Write-Log "Interrupt Steering optimization skipped (user opted out)"
+}
 
 Save-JsonFile -Obj $ctx -Path $ContextJson
 exit 0
