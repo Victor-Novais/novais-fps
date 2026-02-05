@@ -156,6 +156,18 @@ if (args.Length > 0)
         }
         Environment.Exit(0);
     }
+
+    if (string.Equals(args[0], "--micro-arch-optimize", StringComparison.OrdinalIgnoreCase))
+    {
+        var root = AppContext.BaseDirectory;
+        Directory.CreateDirectory(Path.Combine(root, "Logs"));
+        var logPath = Path.Combine(root, "Logs", $"microarch-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log");
+        var helperLog = new Logger(logPath);
+        var optimizer = new MicroArchitectureOptimizer(helperLog);
+        var result = optimizer.ApplyOptimizations(optIn: true);
+        helperLog.Info($"Micro-Architecture Optimization: Success={result.Success}, Message={result.Message}, Changes={result.ChangesApplied}");
+        Environment.Exit(result.Success ? 0 : 1);
+    }
 }
 
 static void ClearAndBanner()

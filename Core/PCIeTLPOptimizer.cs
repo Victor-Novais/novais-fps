@@ -216,46 +216,123 @@ public sealed class PCIeTLPOptimizer
         var vendor = GetMotherboardVendor();
         var steps = new StringBuilder();
         
-        steps.AppendLine("Manual BIOS/UEFI Configuration Steps:");
+        steps.AppendLine("═══════════════════════════════════════════════════════════════════════════════");
+        steps.AppendLine("MANUAL BIOS/UEFI CONFIGURATION GUIDE - PCIe TLP Size Optimization");
+        steps.AppendLine("═══════════════════════════════════════════════════════════════════════════════");
         steps.AppendLine("");
-        steps.AppendLine("1. Restart your computer and enter BIOS/UEFI setup:");
-        steps.AppendLine("   - Common keys: F2, F10, DEL, ESC (varies by manufacturer)");
-        steps.AppendLine("   - Look for message during boot: 'Press [KEY] to enter setup'");
+        steps.AppendLine("STEP 1: Enter BIOS/UEFI Setup");
+        steps.AppendLine("───────────────────────────────────────────────────────────────────────────────");
+        steps.AppendLine("  • Restart your computer");
+        steps.AppendLine("  • During boot, press the BIOS/UEFI entry key:");
+        steps.AppendLine("    - ASUS: F2 or DEL");
+        steps.AppendLine("    - MSI: DEL or F2");
+        steps.AppendLine("    - Gigabyte: DEL or F2");
+        steps.AppendLine("    - ASRock: DEL or F2");
+        steps.AppendLine("    - Other: Common keys are F2, F10, DEL, ESC");
+        steps.AppendLine("  • Look for boot message: 'Press [KEY] to enter setup'");
         steps.AppendLine("");
-        steps.AppendLine($"2. Navigate to PCIe configuration (varies by vendor):");
+        steps.AppendLine("STEP 2: Navigate to PCIe Configuration");
+        steps.AppendLine("───────────────────────────────────────────────────────────────────────────────");
         
         if (vendor.Contains("ASUS", StringComparison.OrdinalIgnoreCase))
         {
-            steps.AppendLine("   - ASUS: Advanced → PCI Subsystem Settings → PCIe TLP Size");
+            steps.AppendLine("  ASUS BIOS Navigation:");
+            steps.AppendLine("    1. Go to: Advanced (F7)");
+            steps.AppendLine("    2. Navigate to: PCI Subsystem Settings");
+            steps.AppendLine("    3. Look for: PCIe TLP Size or Transaction Layer Packet Size");
+            steps.AppendLine("    4. Alternative paths:");
+            steps.AppendLine("       - Advanced → Onboard Devices Configuration → PCIe TLP Size");
+            steps.AppendLine("       - Advanced → Chipset Configuration → PCIe Configuration → TLP Size");
         }
         else if (vendor.Contains("MSI", StringComparison.OrdinalIgnoreCase))
         {
-            steps.AppendLine("   - MSI: Advanced → PCI Subsystem Settings → PCIe TLP Size");
+            steps.AppendLine("  MSI BIOS Navigation:");
+            steps.AppendLine("    1. Go to: Advanced (F7)");
+            steps.AppendLine("    2. Navigate to: PCI Subsystem Settings");
+            steps.AppendLine("    3. Look for: PCIe TLP Size or Transaction Layer Packet Size");
+            steps.AppendLine("    4. Alternative paths:");
+            steps.AppendLine("       - Advanced → PCIe/PCI Subsystem Settings → TLP Size");
+            steps.AppendLine("       - OC → Advanced PCI Settings → PCIe TLP Size");
         }
         else if (vendor.Contains("Gigabyte", StringComparison.OrdinalIgnoreCase))
         {
-            steps.AppendLine("   - Gigabyte: Advanced → PCIe Configuration → TLP Size");
+            steps.AppendLine("  Gigabyte BIOS Navigation:");
+            steps.AppendLine("    1. Go to: Advanced Mode (F2)");
+            steps.AppendLine("    2. Navigate to: Settings → PCIe Configuration");
+            steps.AppendLine("    3. Look for: TLP Size or Transaction Layer Packet Size");
+            steps.AppendLine("    4. Alternative paths:");
+            steps.AppendLine("       - Settings → IO Ports → PCIe Configuration → TLP Size");
+            steps.AppendLine("       - Tweaker → Advanced CPU Settings → PCIe Configuration → TLP Size");
         }
         else if (vendor.Contains("ASRock", StringComparison.OrdinalIgnoreCase))
         {
-            steps.AppendLine("   - ASRock: Advanced → Chipset Configuration → PCIe TLP Size");
+            steps.AppendLine("  ASRock BIOS Navigation:");
+            steps.AppendLine("    1. Go to: Advanced");
+            steps.AppendLine("    2. Navigate to: Chipset Configuration");
+            steps.AppendLine("    3. Look for: PCIe TLP Size or Transaction Layer Packet Size");
+            steps.AppendLine("    4. Alternative paths:");
+            steps.AppendLine("       - Advanced → PCIe Configuration → TLP Size");
         }
         else
         {
-            steps.AppendLine("   - Look for: Advanced → PCIe Configuration → TLP Size (or similar)");
+            steps.AppendLine("  Generic BIOS Navigation:");
+            steps.AppendLine("    1. Enter Advanced or Advanced Mode");
+            steps.AppendLine("    2. Look for sections like:");
+            steps.AppendLine("       - PCIe Configuration");
+            steps.AppendLine("       - PCI Subsystem Settings");
+            steps.AppendLine("       - Chipset Configuration");
+            steps.AppendLine("       - Onboard Devices Configuration");
+            steps.AppendLine("    3. Search for: TLP Size, Transaction Layer Packet Size, or PCIe Packet Size");
         }
         
         steps.AppendLine("");
-        steps.AppendLine($"3. Set TLP Size to: {GetRecommendedTLPSize(device)}");
+        steps.AppendLine("STEP 3: Configure TLP Size");
+        steps.AppendLine("───────────────────────────────────────────────────────────────────────────────");
+        steps.AppendLine($"  • Recommended TLP Size: {GetRecommendedTLPSize(device)}");
+        steps.AppendLine("  • Available options typically:");
+        steps.AppendLine("    - 128 bytes (Minimum latency - RECOMMENDED for competitive gaming)");
+        steps.AppendLine("    - 256 bytes (Default/Balanced)");
+        steps.AppendLine("    - 512 bytes (Higher throughput, slightly higher latency)");
+        steps.AppendLine("  • Select: 128 bytes");
         steps.AppendLine("");
-        steps.AppendLine("4. Save changes and exit BIOS/UEFI (usually F10)");
+        steps.AppendLine("STEP 4: Save and Exit");
+        steps.AppendLine("───────────────────────────────────────────────────────────────────────────────");
+        steps.AppendLine("  • Press F10 to Save & Exit (or navigate to Save & Exit → Save Changes and Exit)");
+        steps.AppendLine("  • Confirm: Yes");
+        steps.AppendLine("  • Computer will restart");
         steps.AppendLine("");
-        steps.AppendLine("5. Restart computer and test system stability");
+        steps.AppendLine("STEP 5: Verify and Test");
+        steps.AppendLine("───────────────────────────────────────────────────────────────────────────────");
+        steps.AppendLine("  • After restart, run NOVAIS FPS diagnostics again:");
+        steps.AppendLine("    NovaisFPS.exe --pcie-tlp-diagnose");
+        steps.AppendLine("  • Test system stability:");
+        steps.AppendLine("    - Run your games for extended periods");
+        steps.AppendLine("    - Monitor for crashes, freezes, or PCIe link errors");
+        steps.AppendLine("    - Check GPU/NVMe detection in Device Manager");
         steps.AppendLine("");
-        steps.AppendLine("6. To revert: Repeat steps 1-4 and set TLP Size back to default (usually 256 bytes)");
+        steps.AppendLine("STEP 6: Revert (if needed)");
+        steps.AppendLine("───────────────────────────────────────────────────────────────────────────────");
+        steps.AppendLine("  • If you experience issues, revert to default:");
+        steps.AppendLine("    1. Enter BIOS/UEFI (same as Step 1)");
+        steps.AppendLine("    2. Navigate to same location (Step 2)");
+        steps.AppendLine("    3. Set TLP Size to: 256 bytes (default)");
+        steps.AppendLine("    4. Save and exit (F10)");
         steps.AppendLine("");
-        steps.AppendLine("NOTE: Some motherboards may not expose TLP size settings. In this case, " +
-                        "the setting may be controlled by the GPU/NVMe firmware or not be adjustable.");
+        steps.AppendLine("═══════════════════════════════════════════════════════════════════════════════");
+        steps.AppendLine("IMPORTANT NOTES:");
+        steps.AppendLine("═══════════════════════════════════════════════════════════════════════════════");
+        steps.AppendLine("  ⚠ Some motherboards may not expose TLP size settings in BIOS/UEFI.");
+        steps.AppendLine("    In this case, the setting may be:");
+        steps.AppendLine("    - Controlled by GPU/NVMe firmware (not adjustable)");
+        steps.AppendLine("    - Hidden in advanced/engineering menus (requires special BIOS)");
+        steps.AppendLine("    - Not supported by your motherboard");
+        steps.AppendLine("");
+        steps.AppendLine("  ⚠ If TLP size setting is not found, your system may already be optimized");
+        steps.AppendLine("    or the setting is not available for your hardware.");
+        steps.AppendLine("");
+        steps.AppendLine("  ⚠ Always test stability after changes. Incorrect TLP configuration can");
+        steps.AppendLine("    cause PCIe link failures, device detection issues, or system instability.");
+        steps.AppendLine("═══════════════════════════════════════════════════════════════════════════════");
         
         return steps.ToString();
     }
@@ -279,6 +356,9 @@ public sealed class PCIeTLPOptimizer
     /// </summary>
     public TLPDiagnosticReport CollectDiagnostics()
     {
+        _log.Info("═══════════════════════════════════════════════════════════════════════════════");
+        _log.Info("PCIe TLP (Transaction Layer Packet) Size Diagnostics");
+        _log.Info("═══════════════════════════════════════════════════════════════════════════════");
         _log.Info("Collecting PCIe TLP diagnostics...");
 
         var devices = DetectPCIeDevices();
@@ -288,8 +368,36 @@ public sealed class PCIeTLPOptimizer
         {
             var rec = GenerateRecommendation(device);
             recommendations.Add(rec);
-            _log.Info($"TLP Recommendation for {device.Name}: {rec.RecommendedTLPSize}");
+            
+            _log.Info("");
+            _log.Info($"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            _log.Info($"Device: {device.Name}");
+            _log.Info($"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            _log.Info($"  Current TLP Size: {rec.CurrentTLPSize}");
+            _log.Info($"  Recommended: {rec.RecommendedTLPSize}");
+            _log.Info($"  Reason: {rec.Reason}");
+            _log.Info($"  Risk Level: {rec.RiskLevel}");
+            _log.Info($"  Benefits: {rec.Benefits}");
+            _log.Info($"  Warnings: {rec.Warnings}");
+            _log.Info("");
+            _log.Info("  BIOS/UEFI Location:");
+            _log.Info($"    {rec.BIOSLocation}");
+            _log.Info("");
+            _log.Info("  Manual Configuration Steps:");
+            var steps = rec.ManualSteps.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
+            foreach (var step in steps)
+            {
+                if (!string.IsNullOrWhiteSpace(step))
+                {
+                    _log.Info($"    {step}");
+                }
+            }
         }
+
+        _log.Info("");
+        _log.Info("═══════════════════════════════════════════════════════════════════════════════");
+        _log.Info($"Summary: {devices.Count} PCIe device(s) detected, {devices.Count(d => d.IsGPU || d.IsNVMe)} critical device(s) (GPU/NVMe)");
+        _log.Info("═══════════════════════════════════════════════════════════════════════════════");
 
         return new TLPDiagnosticReport
         {
