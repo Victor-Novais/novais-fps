@@ -1,9 +1,9 @@
 param(
     [Parameter(Mandatory=$true)][ValidateSet("Apply","Rollback")][string]$Mode,
-    [Parameter(Mandatory=$true)][string]$RunId,
-    [Parameter(Mandatory=$true)][string]$WorkspaceRoot,
-    [Parameter(Mandatory=$true)][string]$LogFile,
-    [Parameter(Mandatory=$true)][string]$ContextJson,
+    [string]$RunId = (Get-Date -Format "yyyyMMdd-HHmmss"),
+    [string]$WorkspaceRoot = (Get-Location).Path,
+    [string]$LogFile = "$((Get-Location).Path)\Logs\novaisfps-$((Get-Date -Format "yyyyMMdd-HHmmss")).log",
+    [string]$ContextJson = "$((Get-Location).Path)\Logs\context-$((Get-Date -Format "yyyyMMdd-HHmmss")).json",
     [string]$TargetContextJson = ""
 )
 
@@ -19,24 +19,50 @@ Write-Log ""
 # OS Information
 Write-Log "[1/6] Collecting OS information..."
 try {
-    $osInfo = Get-ComputerInfo -ErrorAction Stop | Select-Object OsName, OsVersion, OsBuildNumber
-    foreach ($item in $osInfo) {
-        Write-Log ("  OS: " + ($item | ConvertTo-Json -Compress))
+    $osInfo = Get-ComputerInfo -ErrorAction Stop -ErrorVariable +osError | Select-Object OsName, OsVersion, OsBuildNumber
+    if ($osInfo) {
+        foreach ($item in $osInfo) {
+            Write-Log ("  OS: " + ($item | ConvertTo-Json -Compress))
+        }
+        Write-Log "[1/6] OS information collected successfully."
+    } else {
+        Write-Log -Level "WARN" -Message "[1/6] OS information collection returned no data."
     }
 } catch {
-    Write-Log -Level "WARN" -Message "Failed to collect OS information: $($_.Exception.Message)"
+    Write-Log -Level "WARN" -Message "[1/6] Failed to collect OS information: $($_.Exception.Message)"
 }
 Write-Log ""
 
 # CPU Information
 Write-Log "[2/6] Collecting CPU information..."
 try {
-    $cpuInfo = Get-CimInstance Win32_Processor -ErrorAction Stop | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed
-    foreach ($cpu in $cpuInfo) {
-        Write-Log ("  CPU: " + ($cpu | ConvertTo-Json -Compress))
+    # Use CIM session with timeout to avoid hanging
+    $cimSession = New-CimSession -ErrorAction SilentlyContinue
+    $cpuInfo = Get-CimInstance -CimSession $cimSession -ClassName Win32_Processor -ErrorAction Stop -ErrorVariable +cpuError | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed
+    if ($cpuInfo) {
+        foreach ($cpu in $cpuInfo) {
+            Write-Log ("  CPU: " + ($cpu | ConvertTo-Json -Compress))
+        }
+        Write-Log "[2/6] CPU information collected successfully."
+    } else {
+        Write-Log -Level "WARN" -Message "[2/6] CPU information collection returned no data."
+    }
+    if ($cimSession) {
+        Remove-CimSession -CimSession $cimSession -ErrorAction SilentlyContinue
     }
 } catch {
-    Write-Log -Level "WARN" -Message "Failed to collect CPU information: $($_.Exception.Message)"
+    Write-Log -Level "WARN" -Message "[2/6] Failed to collect CPU information: $($_.Exception.Message)"
+    # Fallback: try without CIM session
+    try {
+        $cpuInfo = Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed
+        if ($cpuInfo) {
+            foreach ($cpu in $cpuInfo) {
+                Write-Log ("  CPU (fallback): " + ($cpu | ConvertTo-Json -Compress))
+            }
+        }
+    } catch {
+        Write-Log -Level "WARN" -Message "[2/6] CPU fallback collection also failed: $($_.Exception.Message)"
+    }
 }
 Write-Log ""
 
