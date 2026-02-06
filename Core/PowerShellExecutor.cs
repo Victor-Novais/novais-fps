@@ -100,12 +100,14 @@ public sealed class PowerShellExecutor
 
         // Build arguments:
         // -ExecutionPolicy Bypass deve vir antes de -File para evitar restrições de política
+        // -NonInteractive garante que o PowerShell não solicite entrada do usuário
         // -File é o último argumento de engine, com o caminho do script entre aspas duplas
         // Use short paths (8.3) to avoid issues with special characters and OneDrive
         var args = new List<string>
         {
             "-NoLogo",
             "-NoProfile",
+            "-NonInteractive",
             "-ExecutionPolicy", "Bypass",
             "-File", Quote(finalScriptPath),
             "-Mode", Quote(mode),
@@ -148,24 +150,112 @@ public sealed class PowerShellExecutor
         using var p = new Process { StartInfo = psi };
         var sbOut = new StringBuilder();
         var sbErr = new StringBuilder();
+        var outputLock = new object();
+        var errorLock = new object();
+        var outputComplete = false;
+        var errorComplete = false;
 
-        p.OutputDataReceived += (_, e) => { if (e.Data != null) sbOut.AppendLine(e.Data); };
-        p.ErrorDataReceived += (_, e) => { if (e.Data != null) sbErr.AppendLine(e.Data); };
-
-        p.Start();
-        p.BeginOutputReadLine();
-        p.BeginErrorReadLine();
-
-        if (!p.WaitForExit(timeoutMs))
+        // Event handlers for async output reading with real-time logging
+        p.OutputDataReceived += (_, e) =>
         {
-            try { p.Kill(entireProcessTree: true); } catch { /* ignore */ }
-            return new PowerShellResult { ExitCode = 124, StdErr = "Timed out running PowerShell script." };
-        }
+            if (e.Data != null)
+            {
+                lock (outputLock)
+                {
+                    sbOut.AppendLine(e.Data);
+                    // Log output in real-time for better feedback
+                    _log.Debug($"[PS Output] {e.Data}");
+                }
+            }
+            else
+            {
+                // End of stream
+                outputComplete = true;
+            }
+        };
 
-        var res = new PowerShellResult { ExitCode = p.ExitCode, StdOut = sbOut.ToString(), StdErr = sbErr.ToString() };
-        if (!res.Success)
-            _log.Warn($"Script failed: {Path.GetFileName(scriptPath)} exit={res.ExitCode}");
-        return res;
+        p.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data != null)
+            {
+                lock (errorLock)
+                {
+                    sbErr.AppendLine(e.Data);
+                    // Log errors in real-time
+                    _log.Warn($"[PS Error] {e.Data}");
+                }
+            }
+            else
+            {
+                // End of stream
+                errorComplete = true;
+            }
+        };
+
+        try
+        {
+            p.Start();
+            
+            // Begin async reading BEFORE waiting for exit
+            p.BeginOutputReadLine();
+            p.BeginErrorReadLine();
+
+            // Wait for process to exit
+            if (!p.WaitForExit(timeoutMs))
+            {
+                try { p.Kill(entireProcessTree: true); } catch { /* ignore */ }
+                _log.Error("PowerShell script execution timed out");
+                return new PowerShellResult { ExitCode = 124, StdErr = "Timed out running PowerShell script." };
+            }
+
+            // Wait for async output reading to complete (with timeout)
+            // After WaitForExit, we need to wait for the async readers to finish
+            var waitStart = DateTime.UtcNow;
+            var maxWaitMs = 5000; // Maximum 5 seconds to wait for async readers
+            
+            while ((!outputComplete || !errorComplete) && (DateTime.UtcNow - waitStart).TotalMilliseconds < maxWaitMs)
+            {
+                System.Threading.Thread.Sleep(100);
+            }
+
+            // If async reading didn't complete, log a warning but continue
+            if (!outputComplete || !errorComplete)
+            {
+                _log.Debug($"Async reading incomplete after process exit (Output: {outputComplete}, Error: {errorComplete})");
+            }
+
+            var res = new PowerShellResult 
+            { 
+                ExitCode = p.ExitCode, 
+                StdOut = sbOut.ToString(), 
+                StdErr = sbErr.ToString() 
+            };
+
+            if (!res.Success)
+            {
+                _log.Warn($"Script failed: {Path.GetFileName(scriptPath)} exit={res.ExitCode}");
+                if (!string.IsNullOrWhiteSpace(res.StdErr))
+                {
+                    _log.Warn($"PowerShell error output: {res.StdErr}");
+                }
+            }
+            else
+            {
+                _log.Debug($"Script completed successfully: {scriptFileName}");
+            }
+
+            return res;
+        }
+        catch (Exception ex)
+        {
+            _log.Error($"Exception while running PowerShell script: {ex.Message}");
+            _log.Error($"Stack trace: {ex.StackTrace}");
+            return new PowerShellResult 
+            { 
+                ExitCode = -1, 
+                StdErr = $"Exception: {ex.Message}" 
+            };
+        }
     }
 
     private static string Quote(string s)
