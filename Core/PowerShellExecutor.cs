@@ -73,6 +73,27 @@ public sealed class PowerShellExecutor
             return new PowerShellResult { ExitCode = 2, StdErr = $"Script file not found: {scriptPath}" };
         }
 
+        // Convert paths to 8.3 format to avoid issues with special characters, spaces, and OneDrive
+        var scriptPathShort = PathHelper.GetShortPath(scriptPath);
+        var workspaceRootShort = PathHelper.GetShortPath(ctx.WorkspaceRoot);
+        var logFileShort = PathHelper.GetShortPath(ctx.LogFilePath);
+        var contextJsonShort = PathHelper.GetShortPath(ctx.ContextJsonPath);
+
+        _log.Debug($"Original script path: {scriptPath}");
+        _log.Debug($"Short script path (8.3): {scriptPathShort}");
+        
+        // Verify short path still exists
+        if (!File.Exists(scriptPathShort) && !File.Exists(scriptPath))
+        {
+            _log.Error($"Script not found (both original and short path): {scriptPath}");
+            return new PowerShellResult { ExitCode = 2, StdErr = $"Script file not found: {scriptPath}" };
+        }
+
+        // Use short path if conversion succeeded, otherwise fall back to original
+        var finalScriptPath = scriptPathShort != scriptPath && File.Exists(scriptPathShort) 
+            ? scriptPathShort 
+            : scriptPath;
+
         var ps = ResolvePowerShell();
         if (string.IsNullOrWhiteSpace(ps))
             return new PowerShellResult { ExitCode = 127, StdErr = "No PowerShell found (pwsh/powershell)." };
@@ -80,17 +101,18 @@ public sealed class PowerShellExecutor
         // Build arguments:
         // -ExecutionPolicy Bypass deve vir antes de -File para evitar restrições de política
         // -File é o último argumento de engine, com o caminho do script entre aspas duplas
+        // Use short paths (8.3) to avoid issues with special characters and OneDrive
         var args = new List<string>
         {
             "-NoLogo",
             "-NoProfile",
             "-ExecutionPolicy", "Bypass",
-            "-File", Quote(scriptPath),
+            "-File", Quote(finalScriptPath),
             "-Mode", Quote(mode),
             "-RunId", Quote(ctx.RunId),
-            "-WorkspaceRoot", Quote(ctx.WorkspaceRoot),
-            "-LogFile", Quote(ctx.LogFilePath),
-            "-ContextJson", Quote(ctx.ContextJsonPath)
+            "-WorkspaceRoot", Quote(workspaceRootShort != ctx.WorkspaceRoot && Directory.Exists(workspaceRootShort) ? workspaceRootShort : ctx.WorkspaceRoot),
+            "-LogFile", Quote(logFileShort != ctx.LogFilePath && File.Exists(logFileShort) ? logFileShort : ctx.LogFilePath),
+            "-ContextJson", Quote(contextJsonShort != ctx.ContextJsonPath && File.Exists(contextJsonShort) ? contextJsonShort : ctx.ContextJsonPath)
         };
 
         if (extraArgs != null)
@@ -117,7 +139,11 @@ public sealed class PowerShellExecutor
         var fullCmdLine = $"{ps} {string.Join(" ", args)}";
         _log.Info($"Running script: {scriptFileName} (Mode={mode}, PS={ps})");
         _log.Debug($"Full command: {fullCmdLine}");
-        _log.Debug($"Script path: {scriptPath}");
+        _log.Debug($"Original script path: {scriptPath}");
+        if (finalScriptPath != scriptPath)
+        {
+            _log.Debug($"Using 8.3 short path: {finalScriptPath}");
+        }
 
         using var p = new Process { StartInfo = psi };
         var sbOut = new StringBuilder();

@@ -214,8 +214,14 @@ static void TryUnblockScripts(string scriptsDir, Logger log)
             return;
         }
 
+        // Convert to 8.3 short path to avoid issues with special characters and OneDrive
+        var scriptsDirShort = PathHelper.GetShortPath(scriptsDir);
+        var finalScriptsDir = scriptsDirShort != scriptsDir && Directory.Exists(scriptsDirShort) 
+            ? scriptsDirShort 
+            : scriptsDir;
+
         // Escapa o caminho para uso no comando PowerShell
-        var escapedPath = scriptsDir.Replace("'", "''");
+        var escapedPath = finalScriptsDir.Replace("'", "''");
         var command = $"Get-ChildItem -Path '{escapedPath}' -Filter '*.ps1' -Recurse | Unblock-File -ErrorAction SilentlyContinue";
 
         var psi = new ProcessStartInfo
@@ -278,6 +284,19 @@ if (!AdminCheck.IsAdministrator())
 {
     log.Error("Administrator privileges required. Re-open terminal as Administrator.");
     Environment.Exit(5);
+}
+
+// Detect OneDrive and warn user if workspace is in OneDrive-synced directory
+var oneDriveDetector = new OneDriveDetector(log);
+var oneDriveResult = oneDriveDetector.DetectOneDrive(workspaceRoot);
+if (oneDriveResult.IsOneDrivePath)
+{
+    oneDriveDetector.LogOneDriveWarning(oneDriveResult);
+    Console.WriteLine();
+    Console.WriteLine("⚠ WARNING: OneDrive detected. See log for details.");
+    Console.WriteLine("  Recommendation: Move NOVAIS FPS to a local directory (e.g., C:\\NovaisFPS\\)");
+    Console.WriteLine("  for maximum stability. The tool will attempt to work around OneDrive issues.");
+    Console.WriteLine();
 }
 
 using var timer = new TimerResolution();

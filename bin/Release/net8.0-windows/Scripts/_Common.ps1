@@ -3,25 +3,88 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+# Ensure $PSScriptRoot is an absolute path and handle edge cases
+if (-not $PSScriptRoot) {
+    # Fallback: try to get script root from MyInvocation
+    $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+if ($PSScriptRoot) {
+    # Convert to absolute path to avoid issues with relative paths
+    $PSScriptRoot = [System.IO.Path]::GetFullPath($PSScriptRoot)
+}
+
+# Robust error handling wrapper for critical functions
+function Invoke-Safe {
+    param(
+        [Parameter(Mandatory=$true)][scriptblock]$ScriptBlock,
+        [string]$ErrorMessage = "Operation failed",
+        [object]$ErrorObject = $null
+    )
+    try {
+        return & $ScriptBlock
+    } catch {
+        $errorDetails = $_.Exception.Message
+        if ($ErrorObject) {
+            Write-Log -Level "ERROR" -Message "$ErrorMessage`: $errorDetails (Object: $ErrorObject)"
+        } else {
+            Write-Log -Level "ERROR" -Message "$ErrorMessage`: $errorDetails"
+        }
+        throw
+    }
+}
+
 function Write-Log {
     param(
         [Parameter(Mandatory=$true)][string]$Message,
         [ValidateSet("INFO","WARN","ERROR")][string]$Level = "INFO",
         [string]$LogFile = $script:LogFile
     )
-    $line = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff') [$Level] $Message"
-    Write-Host $line
-    if ($LogFile -and (Test-Path (Split-Path -Parent $LogFile))) {
-        Add-Content -Path $LogFile -Value $line -Encoding UTF8
+    try {
+        $line = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff') [$Level] $Message"
+        Write-Host $line -ErrorAction SilentlyContinue
+        
+        if ($LogFile) {
+            try {
+                $logDir = Split-Path -Parent $LogFile
+                if ($logDir -and (Test-Path $logDir)) {
+                    # Use absolute path for log file
+                    $absLogFile = [System.IO.Path]::GetFullPath($LogFile)
+                    Add-Content -Path $absLogFile -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue
+                } elseif ($logDir) {
+                    # Try to create directory if it doesn't exist
+                    try {
+                        New-Item -ItemType Directory -Force -Path $logDir -ErrorAction Stop | Out-Null
+                        $absLogFile = [System.IO.Path]::GetFullPath($LogFile)
+                        Add-Content -Path $absLogFile -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue
+                    } catch {
+                        # If directory creation fails, just write to console
+                        Write-Host "WARNING: Could not write to log file: $($_.Exception.Message)" -ForegroundColor Yellow
+                    }
+                }
+            } catch {
+                # If log writing fails, continue without logging (don't break execution)
+                Write-Host "WARNING: Log write failed: $($_.Exception.Message)" -ForegroundColor Yellow -ErrorAction SilentlyContinue
+            }
+        }
+    } catch {
+        # Last resort: just try to write to console
+        Write-Host "[$Level] $Message" -ErrorAction SilentlyContinue
     }
 }
 
 function Load-JsonFile {
     param([Parameter(Mandatory=$true)][string]$Path)
-    if (-not (Test-Path $Path)) { return $null }
-    $raw = Get-Content -Path $Path -Raw -Encoding UTF8
-    if ([string]::IsNullOrWhiteSpace($raw)) { return $null }
-    return ($raw | ConvertFrom-Json -Depth 20)
+    try {
+        # Convert to absolute path
+        $absPath = [System.IO.Path]::GetFullPath($Path)
+        if (-not (Test-Path $absPath)) { return $null }
+        $raw = Get-Content -Path $absPath -Raw -Encoding UTF8 -ErrorAction Stop
+        if ([string]::IsNullOrWhiteSpace($raw)) { return $null }
+        return ($raw | ConvertFrom-Json -Depth 20 -ErrorAction Stop)
+    } catch {
+        Write-Log -Level "WARN" -Message "Failed to load JSON file '$Path': $($_.Exception.Message)"
+        return $null
+    }
 }
 
 function Save-JsonFile {
@@ -29,10 +92,19 @@ function Save-JsonFile {
         [Parameter(Mandatory=$true)][object]$Obj,
         [Parameter(Mandatory=$true)][string]$Path
     )
-    $json = $Obj | ConvertTo-Json -Depth 20
-    $dir = Split-Path -Parent $Path
-    if ($dir) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-    Set-Content -Path $Path -Value $json -Encoding UTF8
+    try {
+        # Convert to absolute path
+        $absPath = [System.IO.Path]::GetFullPath($Path)
+        $json = $Obj | ConvertTo-Json -Depth 20 -ErrorAction Stop
+        $dir = Split-Path -Parent $absPath
+        if ($dir) { 
+            New-Item -ItemType Directory -Force -Path $dir -ErrorAction Stop | Out-Null 
+        }
+        Set-Content -Path $absPath -Value $json -Encoding UTF8 -ErrorAction Stop
+    } catch {
+        Write-Log -Level "ERROR" -Message "Failed to save JSON file '$Path': $($_.Exception.Message)"
+        throw
+    }
 }
 
 function Ensure-ArrayProp {
@@ -68,9 +140,12 @@ function Add-Change {
 function Get-RegistryValueSafe {
     param([Parameter(Mandatory=$true)][string]$Path, [Parameter(Mandatory=$true)][string]$Name)
     try {
+        # Ensure path exists before trying to read
+        if (-not (Test-Path $Path)) { return $null }
         $v = (Get-ItemProperty -Path $Path -Name $Name -ErrorAction Stop).$Name
         return $v
     } catch {
+        # Silently return null on any error (key doesn't exist, permission denied, etc.)
         return $null
     }
 }
@@ -83,11 +158,16 @@ function Set-RegistryDword {
         [Parameter(Mandatory=$true)][int]$Value,
         [string]$Note = ""
     )
-    New-Item -Path $Path -Force | Out-Null
-    $before = Get-RegistryValueSafe -Path $Path -Name $Name
-    Set-ItemProperty -Path $Path -Name $Name -Type DWord -Value $Value -Force
-    $after = Get-RegistryValueSafe -Path $Path -Name $Name
-    Add-Change -Ctx $Ctx -Category "registry" -Key "$Path\$Name" -Before $before -After $after -Note $Note
+    try {
+        New-Item -Path $Path -Force -ErrorAction Stop | Out-Null
+        $before = Get-RegistryValueSafe -Path $Path -Name $Name
+        Set-ItemProperty -Path $Path -Name $Name -Type DWord -Value $Value -Force -ErrorAction Stop
+        $after = Get-RegistryValueSafe -Path $Path -Name $Name
+        Add-Change -Ctx $Ctx -Category "registry" -Key "$Path\$Name" -Before $before -After $after -Note $Note
+    } catch {
+        Write-Log -Level "WARN" -Message "Failed to set registry DWord '$Path\$Name': $($_.Exception.Message)"
+        throw
+    }
 }
 
 function Set-RegistryString {
@@ -98,11 +178,16 @@ function Set-RegistryString {
         [Parameter(Mandatory=$true)][string]$Value,
         [string]$Note = ""
     )
-    New-Item -Path $Path -Force | Out-Null
-    $before = Get-RegistryValueSafe -Path $Path -Name $Name
-    Set-ItemProperty -Path $Path -Name $Name -Type String -Value $Value -Force
-    $after = Get-RegistryValueSafe -Path $Path -Name $Name
-    Add-Change -Ctx $Ctx -Category "registry" -Key "$Path\$Name" -Before $before -After $after -Note $Note
+    try {
+        New-Item -Path $Path -Force -ErrorAction Stop | Out-Null
+        $before = Get-RegistryValueSafe -Path $Path -Name $Name
+        Set-ItemProperty -Path $Path -Name $Name -Type String -Value $Value -Force -ErrorAction Stop
+        $after = Get-RegistryValueSafe -Path $Path -Name $Name
+        Add-Change -Ctx $Ctx -Category "registry" -Key "$Path\$Name" -Before $before -After $after -Note $Note
+    } catch {
+        Write-Log -Level "WARN" -Message "Failed to set registry String '$Path\$Name': $($_.Exception.Message)"
+        throw
+    }
 }
 
 function Rollback-RegistryFromChanges {
@@ -136,8 +221,18 @@ function Rollback-RegistryFromChanges {
 
 function Run-Cmd {
     param([Parameter(Mandatory=$true)][string]$File, [Parameter(Mandatory=$true)][string]$Args)
-    $p = Start-Process -FilePath $File -ArgumentList $Args -Wait -PassThru -NoNewWindow
-    return $p.ExitCode
+    try {
+        # Use absolute path for executable if it's a file path
+        $absFile = $File
+        if (Test-Path $File) {
+            $absFile = [System.IO.Path]::GetFullPath($File)
+        }
+        $p = Start-Process -FilePath $absFile -ArgumentList $Args -Wait -PassThru -NoNewWindow -ErrorAction Stop
+        return $p.ExitCode
+    } catch {
+        Write-Log -Level "ERROR" -Message "Failed to run command '$File $Args': $($_.Exception.Message)"
+        return -1
+    }
 }
 
 function Set-ServiceSafe {
